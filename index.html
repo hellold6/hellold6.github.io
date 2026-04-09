@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hellold</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08080a;
+  --surface: #101013;
+  --border: rgba(255,255,255,0.06);
+  --text: #e8e8ea;
+  --muted: #6a6a7a;
+  --accent: #e8734a; 
+  --teto-pink: #ff7bbd;
+  --mono: 'JetBrains Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+  background: var(--bg); color: var(--text); font-family: var(--mono); 
+  font-size: 13px; line-height: 1.6; overflow-x: hidden; cursor: crosshair;
+}
+
+.container { max-width: 850px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 2; }
+
+nav { padding: 2rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+.logo { font-family: var(--display); font-size: 20px; text-decoration: none; color: var(--text); letter-spacing: -1px; }
+.logo span { color: var(--accent); transition: all 0.3s; }
+
+.hero { padding: 8rem 0 4rem; }
+.hero-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--accent); margin-bottom: 1rem; }
+.hero-title { font-family: var(--display); font-size: clamp(3.5rem, 12vw, 7rem); line-height: 0.85; letter-spacing: -4px; margin-bottom: 2rem; }
+.hero-desc { max-width: 500px; color: var(--muted); font-size: 14px; margin-bottom: 3rem; }
+
+.stats { display: flex; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; margin-bottom: 4rem; }
+.stat { flex: 1; padding: 1.5rem; text-align: center; border-right: 1px solid var(--border); }
+.stat:last-child { border-right: none; }
+.stat-val { display: block; font-family: var(--display); font-size: 24px; color: var(--accent); }
+.stat-lab { font-size: 9px; text-transform: uppercase; color: var(--muted); }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 4rem; }
+.card { 
+  background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; 
+  text-decoration: none; color: inherit; transition: 0.3s;
+}
+.card:hover { border-color: var(--accent); transform: translateY(-4px); }
+.card h3 { font-family: var(--display); font-size: 18px; margin-bottom: 0.5rem; }
+.card p { color: var(--muted); font-size: 12px; }
+
+#music-hud {
+  position: fixed; bottom: 20px; right: 20px; background: var(--surface);
+  border: 1px solid var(--accent); padding: 10px 15px; font-size: 10px;
+  text-transform: uppercase; display: none; z-index: 100;
+}
+
+@media (max-width: 600px) { .grid { grid-template-columns: 1fr; } .stats { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <nav>
+    <a href="#" class="logo"><span>//</span> hellold</a>
+    <div style="display:flex; gap: 20px;">
+      <a href="https://github.com/hellold6" style="color:var(--muted); text-decoration:none; font-size:11px;">github</a>
+      <a href="mailto:wr731642@gmail.com" style="color:var(--muted); text-decoration:none; font-size:11px;">contact</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-tag">Developer & Modder // NSW, AU</div>
+    <h1 class="hero-title">HELLOLD<br><span style="color:var(--muted)">EST. 2010</span></h1>
+    <p class="hero-desc">
+      Technical exploration into game engine mechanics and automated tool development. 
+      Focusing on C# and Source Engine environments.
+    </p>
+  </section>
+
+  <div class="stats">
+    <div class="stat"><span class="stat-val">5</span><span class="stat-lab">Years Source Exp.</span></div>
+    <div class="stat"><span class="stat-val">04</span><span class="stat-lab">Languages</span></div>
+    <div class="stat"><span class="stat-val">∞</span><span class="stat-lab">Project Iterations</span></div>
+  </div>
+
+  <section id="projects">
+    <div class="grid">
+      <a href="https://github.com/hellold6/CS2Lineups" class="card">
+        <h3>CS2 Lineups</h3>
+        <p>A grenade lineup generator leveraging ValveResourceFormat to parse game data directly.</p>
+      </a>
+      <div class="card">
+        <h3>Automation Tools</h3>
+        <p>Developing custom scripts for workflow optimization and game mod management.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer style="padding: 4rem 0; color: var(--muted); font-size: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between;">
+    <span>© 2026 HELLOLD</span>
+    <span>YEAR 11 // NSW</span>
+  </footer>
+</div>
+
+<div id="music-hud">♪ Playing: <span id="track-name">...</span></div>
+
+<script>
+const playlist = [
+  'music/track1.mp3', 
+  'music/track2.mp3'
+]; 
+
+let audioStarted = false;
+function startMusic() {
+  if (audioStarted || playlist.length === 0) return;
+  const track = playlist[Math.floor(Math.random() * playlist.length)];
+  const player = new Audio(track);
+  player.volume = 0.25;
+  player.play().then(() => {
+    document.getElementById('music-hud').style.display = 'block';
+    document.getElementById('track-name').innerText = track.split('/').pop();
+    audioStarted = true;
+  });
+}
+
+window.addEventListener('mousedown', startMusic);
+
+/* TETO EGG */
+let input = '';
+window.addEventListener('keydown', (e) => {
+  input += e.key.toLowerCase();
+  if (input.includes('teto')) {
+    document.documentElement.style.setProperty('--accent', 'var(--teto-pink)');
+    input = '';
+  }
+});
+</script>
+</body>
+</html>
