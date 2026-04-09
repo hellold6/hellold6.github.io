@@ -18,10 +18,52 @@
   --display: 'Syne', sans-serif;
 }
 
+.splash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  transition: opacity 1s ease-out;
+}
+
+.splash.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-content {
+  text-align: center;
+}
+
+.splash-content .logo {
+  font-family: var(--display);
+  font-size: 48px;
+  color: var(--text);
+  letter-spacing: -1px;
+  margin-bottom: 1rem;
+}
+
+.splash-content .logo span {
+  color: var(--accent);
+}
+
+.splash-content p {
+  color: var(--muted);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { 
   background: var(--bg); color: var(--text); font-family: var(--mono); 
-  font-size: 13px; line-height: 1.6; overflow-x: hidden; cursor: crosshair;
+  font-size: 13px; line-height: 1.6; overflow-x: hidden; cursor: default;
 }
 
 .container { max-width: 850px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 2; }
@@ -54,12 +96,35 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   position: fixed; bottom: 20px; right: 20px; background: var(--surface);
   border: 1px solid var(--accent); padding: 10px 15px; font-size: 10px;
   text-transform: uppercase; display: none; z-index: 100;
+  display: flex; align-items: center; gap: 10px;
+}
+
+#music-hud button {
+  background: none; border: none; color: var(--text); cursor: pointer;
+  font-size: 12px; padding: 2px;
+}
+
+#music-hud .progress {
+  display: none;
+  width: 100px;
+  margin-left: 10px;
+}
+
+#music-hud:hover .progress {
+  display: block;
 }
 
 @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } .stats { flex-direction: column; } }
 </style>
 </head>
 <body>
+
+<div id="splash-screen" class="splash">
+  <div class="splash-content">
+    <div class="logo"><span>//</span> hellold</div>
+    <p>Click to Enter</p>
+  </div>
+</div>
 
 <div class="container">
   <nav>
@@ -98,13 +163,32 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
     </div>
   </section>
 
+  <section id="game-configs">
+    <div class="grid">
+      <div class="card">
+        <h3>Source Engine Config</h3>
+        <p>Optimized settings for Source Engine games including autoexec and video configs.</p>
+      </div>
+      <div class="card">
+        <h3>CS2 Binds</h3>
+        <p>Custom key binds and scripts for Counter-Strike 2 gameplay enhancement.</p>
+      </div>
+    </div>
+  </section>
+
   <footer style="padding: 4rem 0; color: var(--muted); font-size: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between;">
     <span>© 2026 HELLOLD</span>
     <span>YEAR 11 // NSW</span>
   </footer>
 </div>
 
-<div id="music-hud">♪ Playing: <span id="track-name">...</span></div>
+<div id="music-hud">
+  ♪ <span id="track-name">...</span>
+  <button id="play-pause">PAUSE</button>
+  <button id="volume-down">VOL-</button>
+  <button id="volume-up">VOL+</button>
+  <input type="range" class="progress" id="progress" min="0" max="100" value="0">
+</div>
 
 <script>
 /* MUSIC LOGIC */
@@ -113,20 +197,38 @@ const playlist = [
 ]; 
 
 let audioStarted = false;
+let player;
 
-function startMusic() {
+function initSite() {
+  // Fade out splash screen
+  const splash = document.getElementById('splash-screen');
+  splash.classList.add('fade-out');
+  
+  // Start music with fade-in
   if (audioStarted || playlist.length === 0) return;
   
   const track = playlist[0]; // Only one file available
-  const player = new Audio(track);
-  player.volume = 0.25;
+  player = new Audio(track);
+  player.volume = 0;
   
   player.play().then(() => {
-    document.getElementById('music-hud').style.display = 'block';
+    document.getElementById('music-hud').style.display = 'flex';
     // Clean up the display name for the HUD
     document.getElementById('track-name').innerText = "Atomic Amnesia";
     audioStarted = true;
     console.log("Audio started: Atomic Amnesia");
+    
+    // Fade in volume
+    const fadeIn = setInterval(() => {
+      if (player.volume < 0.25) {
+        player.volume += 0.01;
+      } else {
+        clearInterval(fadeIn);
+      }
+    }, 50);
+    
+    // Add controls
+    setupMusicControls();
   }).catch(e => {
     console.log("Waiting for interaction...");
   });
@@ -134,8 +236,43 @@ function startMusic() {
 
 // Triggers on any first movement/click
 ['mousedown', 'keydown', 'wheel', 'touchstart'].forEach(event => {
-  window.addEventListener(event, startMusic, { once: true });
+  window.addEventListener(event, initSite, { once: true });
 });
+
+function setupMusicControls() {
+  const playPauseBtn = document.getElementById('play-pause');
+  const volumeDownBtn = document.getElementById('volume-down');
+  const volumeUpBtn = document.getElementById('volume-up');
+  const progressBar = document.getElementById('progress');
+  
+  playPauseBtn.addEventListener('click', () => {
+    if (player.paused) {
+      player.play();
+      playPauseBtn.textContent = 'PAUSE';
+    } else {
+      player.pause();
+      playPauseBtn.textContent = 'PLAY';
+    }
+  });
+  
+  volumeDownBtn.addEventListener('click', () => {
+    player.volume = Math.max(0, player.volume - 0.1);
+  });
+  
+  volumeUpBtn.addEventListener('click', () => {
+    player.volume = Math.min(1, player.volume + 0.1);
+  });
+  
+  player.addEventListener('timeupdate', () => {
+    const percent = (player.currentTime / player.duration) * 100;
+    progressBar.value = percent;
+  });
+  
+  progressBar.addEventListener('input', () => {
+    const time = (progressBar.value / 100) * player.duration;
+    player.currentTime = time;
+  });
+}
 
 /* TETO EGG */
 let input = '';
