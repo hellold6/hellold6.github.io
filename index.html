@@ -107,25 +107,35 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 <div id="music-hud">♪ Playing: <span id="track-name">...</span></div>
 
 <script>
+/* MUSIC LOGIC */
 const playlist = [
-  'music/track1.mp3', 
-  'music/track2.mp3'
+  'Audio Crime - Atomic Amnesia.m4a'
 ]; 
 
 let audioStarted = false;
+
 function startMusic() {
   if (audioStarted || playlist.length === 0) return;
-  const track = playlist[Math.floor(Math.random() * playlist.length)];
+  
+  const track = playlist[0]; // Only one file available
   const player = new Audio(track);
   player.volume = 0.25;
+  
   player.play().then(() => {
     document.getElementById('music-hud').style.display = 'block';
-    document.getElementById('track-name').innerText = track.split('/').pop();
+    // Clean up the display name for the HUD
+    document.getElementById('track-name').innerText = "Atomic Amnesia";
     audioStarted = true;
+    console.log("Audio started: Atomic Amnesia");
+  }).catch(e => {
+    console.log("Waiting for interaction...");
   });
 }
 
-window.addEventListener('mousedown', startMusic);
+// Triggers on any first movement/click
+['mousedown', 'keydown', 'wheel', 'touchstart'].forEach(event => {
+  window.addEventListener(event, startMusic, { once: true });
+});
 
 /* TETO EGG */
 let input = '';
