@@ -102,15 +102,14 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   padding: 10px 15px;
   font-size: 12px;
   text-transform: uppercase;
-  display: none;
-  z-index: 100;
-  display: flex;
+  display: none; /* JS sets to flex when audio starts */
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
   max-width: 560px;
   width: auto;
+  z-index: 100;
 }
 
 #music-hud button {
@@ -123,37 +122,34 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   border-radius: 6px;
 }
 
-#music-hud button:hover {
-  border-color: var(--accent);
-}
+#music-hud button:hover { border-color: var(--accent); }
 
 #music-hud .progress {
-  display: none;
   width: 130px;
   margin-left: 10px;
 }
 
-#music-hud:hover .progress {
-  display: block;
-}
-
 @media (max-width: 600px) {
-  .container { padding: 0 1rem; text-align: center; }
-  nav { flex-wrap: wrap; gap: 1rem; padding: 1.5rem 0; justify-content: center; }
-  nav > div { display: flex; justify-content: center; width: 100%; }
-  .hero { padding: 6rem 0 2.5rem; }
-  .hero-tag,
-  .hero-title,
-  .hero-desc { text-align: center; margin-left: auto; margin-right: auto; }
-  .hero-desc { max-width: 100%; font-size: 13px; }
-  .stats { flex-direction: column; align-items: center; }
-  .stat { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+  .container { padding: 0 1.25rem; }
+  nav { flex-wrap: wrap; gap: 0.75rem; padding: 1.25rem 0; justify-content: space-between; }
+  .hero { padding: 5rem 0 2.5rem; }
+  .hero-title { font-size: clamp(2.8rem, 15vw, 4.5rem); letter-spacing: -2px; }
+  .hero-desc { font-size: 13px; }
+  .stats { flex-direction: column; }
+  .stat { border-right: none; border-bottom: 1px solid var(--border); }
   .stat:last-child { border-bottom: none; }
-  .grid { justify-items: center; }
-  .card { padding: 1.25rem; }
-  #music-hud { left: 12px; right: 12px; padding: 12px; gap: 8px; justify-content: center; }
+  .grid { grid-template-columns: 1fr; }
+  #music-hud {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    padding: 12px;
+    gap: 8px;
+    justify-content: center;
+    max-width: 100%;
+  }
   #music-hud button { font-size: 13px; padding: 8px 12px; }
-  #music-hud .progress { display: block; width: 100%; margin-left: 0; }
+  #music-hud .progress { width: 100%; margin-left: 0; order: 99; }
 }
 </style>
 </head>
@@ -171,7 +167,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
     <a href="#" class="logo"><span>//</span> hellold</a>
     <div style="display:flex; gap: 20px;">
       <a href="https://github.com/hellold6" style="color:var(--muted); text-decoration:none; font-size:11px;">github</a>
-      <a href="mailto:wr731642@gmail.com" style="color:var(--muted); text-decoration:none; font-size:11px;">contact</a>
+      <a href="/cdn-cgi/l/email-protection#f58287c2c6c4c3c1c7b59298949c99db969a98" style="color:var(--muted); text-decoration:none; font-size:11px;">contact</a>
     </div>
   </nav>
 
@@ -230,7 +226,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   <input type="range" class="progress" id="progress" min="0" max="100" value="0">
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 /* MUSIC LOGIC */
 const playlist = [
   'Audio Crime - Atomic Amnesia.m4a'
@@ -318,11 +314,4 @@ function setupMusicControls() {
 let input = '';
 window.addEventListener('keydown', (e) => {
   input += e.key.toLowerCase();
-  if (input.includes('teto')) {
-    document.documentElement.style.setProperty('--accent', 'var(--teto-pink)');
-    input = '';
-  }
-});
-</script>
-</body>
-</html>
+  if (input.include
