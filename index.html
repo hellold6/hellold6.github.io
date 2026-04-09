@@ -93,20 +93,43 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 .card p { color: var(--muted); font-size: 12px; }
 
 #music-hud {
-  position: fixed; bottom: 20px; right: 20px; background: var(--surface);
-  border: 1px solid var(--accent); padding: 10px 15px; font-size: 10px;
-  text-transform: uppercase; display: none; z-index: 100;
-  display: flex; align-items: center; gap: 10px;
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 15px;
+  font-size: 12px;
+  text-transform: uppercase;
+  display: none;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 560px;
+  width: auto;
 }
 
 #music-hud button {
-  background: none; border: none; color: var(--text); cursor: pointer;
-  font-size: 12px; padding: 2px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+#music-hud button:hover {
+  border-color: var(--accent);
 }
 
 #music-hud .progress {
   display: none;
-  width: 100px;
+  width: 130px;
   margin-left: 10px;
 }
 
@@ -114,7 +137,24 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   display: block;
 }
 
-@media (max-width: 600px) { .grid { grid-template-columns: 1fr; } .stats { flex-direction: column; } }
+@media (max-width: 600px) {
+  .container { padding: 0 1rem; text-align: center; }
+  nav { flex-wrap: wrap; gap: 1rem; padding: 1.5rem 0; justify-content: center; }
+  nav > div { display: flex; justify-content: center; width: 100%; }
+  .hero { padding: 6rem 0 2.5rem; }
+  .hero-tag,
+  .hero-title,
+  .hero-desc { text-align: center; margin-left: auto; margin-right: auto; }
+  .hero-desc { max-width: 100%; font-size: 13px; }
+  .stats { flex-direction: column; align-items: center; }
+  .stat { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+  .stat:last-child { border-bottom: none; }
+  .grid { justify-items: center; }
+  .card { padding: 1.25rem; }
+  #music-hud { left: 12px; right: 12px; padding: 12px; gap: 8px; justify-content: center; }
+  #music-hud button { font-size: 13px; padding: 8px 12px; }
+  #music-hud .progress { display: block; width: 100%; margin-left: 0; }
+}
 </style>
 </head>
 <body>
