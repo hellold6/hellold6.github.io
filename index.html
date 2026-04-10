@@ -84,6 +84,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 .stat-lab { font-size: 9px; text-transform: uppercase; color: var(--muted); }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 4rem; }
+.grid:has(> :only-child) { justify-items: center; }
 .card { 
   background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; 
   text-decoration: none; color: inherit; transition: 0.3s;
@@ -229,8 +230,8 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 <script>
 /* MUSIC LOGIC */
 const playlist = [
-  "Audio Crime - Atomic Amnesia.m4a",
-  "Marino - I'm Doing Fine (Official AMV).m4a"
+  { file: "Audio Crime - Atomic Amnesia.m4a", name: "Atomic Amnesia" },
+  { file: "Marino - I'm Doing Fine (Official AMV).m4a", name: "I'm Doing Fine" }
 ]; 
 
 let audioStarted = false;
@@ -244,14 +245,14 @@ function initSite() {
   // Start music with fade-in
   if (audioStarted || playlist.length === 0) return;
   
-  const track = playlist[0]; // Only one file available
-  player = new Audio(track);
+  const track = playlist[Math.floor(Math.random() * playlist.length)];
+  player = new Audio(track.file);
   player.volume = 0;
   
   player.play().then(() => {
     document.getElementById('music-hud').style.display = 'flex';
     // Clean up the display name for the HUD
-    document.getElementById('track-name').innerText = "Atomic Amnesia";
+    document.getElementById('track-name').innerText = track.name;
     audioStarted = true;
     console.log("Audio started: Atomic Amnesia");
     
