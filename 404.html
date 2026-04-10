@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 // hellold</title>
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<link rel="icon" href="/favicon.ico">
+<style>
+:root {
+  --bg: #08080a;
+  --surface: #101013;
+  --border: rgba(255,255,255,0.06);
+  --text: #e8e8ea;
+  --muted: #6a6a7a;
+  --accent: #e8734a;
+  --teto-pink: #ff7bbd;
+  --mono: 'JetBrains Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--mono);
+  font-size: 13px; line-height: 1.6; overflow-x: hidden; cursor: default;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+.container { max-width: 850px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 2; width: 100%; }
+
+nav { padding: 2rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+.logo { font-family: var(--display); font-size: 20px; text-decoration: none; color: var(--text); letter-spacing: -1px; }
+.logo span { color: var(--accent); }
+
+main { flex: 1; display: flex; align-items: center; }
+
+.error-section { padding: 6rem 0; width: 100%; }
+
+.error-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--accent); margin-bottom: 1rem; }
+
+.error-code {
+  font-family: var(--display);
+  font-size: clamp(6rem, 20vw, 12rem);
+  line-height: 0.85;
+  letter-spacing: -6px;
+  margin-bottom: 2rem;
+  color: var(--text);
+}
+
+.error-code .dim { color: var(--muted); }
+
+.error-desc { max-width: 500px; color: var(--muted); font-size: 14px; margin-bottom: 3rem; }
+
+.error-meta {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem 1.5rem;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 3rem;
+  max-width: 480px;
+}
+
+.error-meta .row { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid var(--border); }
+.error-meta .row:last-child { border-bottom: none; }
+.error-meta .key { color: var(--accent); }
+
+.actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+.btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface);
+  transition: 0.3s;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: var(--accent); color: var(--text); }
+.btn.primary { border-color: var(--accent); color: var(--accent); }
+.btn.primary:hover { background: var(--accent); color: var(--bg); }
+
+footer {
+  padding: 4rem 0;
+  color: var(--muted);
+  font-size: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 600px) {
+  .container { padding: 0 1rem; }
+  nav { flex-wrap: wrap; gap: 1rem; padding: 1.5rem 0; justify-content: center; }
+  nav > div { display: flex; justify-content: center; width: 100%; }
+  .error-section { padding: 4rem 0; text-align: center; }
+  .error-tag, .error-code, .error-desc { text-align: center; margin-left: auto; margin-right: auto; }
+  .error-meta { margin-left: auto; margin-right: auto; }
+  .actions { justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <nav>
+    <a href="/" class="logo"><span>//</span> hellold</a>
+    <div style="display:flex; gap: 20px;">
+      <a href="https://github.com/hellold6" style="color:var(--muted); text-decoration:none; font-size:11px;">github</a>
+      <a href="mailto:wr731642@gmail.com" style="color:var(--muted); text-decoration:none; font-size:11px;">contact</a>
+    </div>
+  </nav>
+</div>
+
+<main>
+  <div class="container">
+    <section class="error-section">
+      <div class="error-tag">Error // Page Not Found</div>
+      <div class="error-code">404<br><span class="dim">NULL</span></div>
+      <p class="error-desc">
+        The resource at this path doesn't exist or has been moved. Check the URL or head back to safety.
+      </p>
+
+      <div class="error-meta">
+        <div class="row"><span class="key">STATUS</span><span>404 NOT_FOUND</span></div>
+        <div class="row"><span class="key">PATH</span><span id="path-display">/???</span></div>
+        <div class="row"><span class="key">HOST</span><span>hellold.dev</span></div>
+      </div>
+
+      <div class="actions">
+        <a href="/" class="btn primary">← Back Home</a>
+        <a href="https://github.com/hellold6" class="btn">GitHub</a>
+        <a href="mailto:wr731642@gmail.com" class="btn">Contact</a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="container">
+  <footer>
+    <span>© 2026 HELLOLD</span>
+    <span>YEAR 11 // NSW</span>
+  </footer>
+</div>
+
+<script>
+document.getElementById('path-display').textContent = window.location.pathname || '/???';
+
+let input = '';
+window.addEventListener('keydown', (e) => {
+  input += e.key.toLowerCase();
+  if (input.includes('teto')) {
+    document.documentElement.style.setProperty('--accent', 'var(--teto-pink)');
+    input = '';
+  }
+});
+</script>
+</body>
+</html>
