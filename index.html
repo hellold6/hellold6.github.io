@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>hellold</title>
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -140,6 +144,11 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   opacity: 1;
   pointer-events: auto;
 }
+#projects .grid {
+  grid-template-columns: 1fr;
+  max-width: 400px;
+  margin: 0 auto 4rem;
+}
 
 @media (max-width: 600px) {
   .container { padding: 0 1rem; text-align: center; }
@@ -157,7 +166,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   .card { padding: 1.25rem; }
   #music-hud { left: 12px; right: 12px; padding: 12px; gap: 8px; justify-content: center; }
   #music-hud button { font-size: 13px; padding: 8px 12px; }
-  #music-hud .progress { display: block; width: 100%; margin-left: 0; }
+  #music-hud .progress { opacity: 1; width: 100%; margin-left: 0; pointer-events: auto; }
 }
 </style>
 </head>
@@ -205,7 +214,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 
   <section id="game-configs">
     <div class="grid">
-      <a href="https://raw.githubusercontent.com/hellold6/hellold6.github.io/refs/heads/main/TF2%20bind/tf2_autoexec.cfg" target="_blank" class="card">
+      <a href="https://raw.githubusercontent.com/hellold6/hellold6.github.io/refs/heads/main/TF2%20bind/autoexec.cfg" target="_blank" class="card">
         <h3>TF2 Binds</h3>
         <p>Team Fortress 2 custom key binds.</p>
       </a>
