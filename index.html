@@ -84,7 +84,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 .stat-lab { font-size: 9px; text-transform: uppercase; color: var(--muted); }
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 4rem; }
-.grid:has(> :only-child) { justify-items: center; }
+.grid:has(> :only-child) { max-width: 400px; margin-left: auto; margin-right: auto; }
 .card { 
   background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; 
   text-decoration: none; color: inherit; transition: 0.3s;
@@ -129,13 +129,16 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 }
 
 #music-hud .progress {
-  display: none;
   width: 130px;
   margin-left: 10px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 #music-hud:hover .progress {
-  display: block;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 @media (max-width: 600px) {
