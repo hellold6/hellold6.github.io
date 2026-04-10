@@ -149,7 +149,7 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   .stats { flex-direction: column; align-items: center; }
   .stat { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
   .stat:last-child { border-bottom: none; }
-  .grid { justify-items: center; }
+  .grid { grid-template-columns: 1fr; justify-items: center; }
   .card { padding: 1.25rem; }
   #music-hud { left: 12px; right: 12px; padding: 12px; gap: 8px; justify-content: center; }
   #music-hud button { font-size: 13px; padding: 8px 12px; }
@@ -196,23 +196,19 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
         <h3>CS2 Lineups</h3>
         <p>A grenade lineup generator leveraging ValveResourceFormat to parse game data directly.</p>
       </a>
-      <div class="card">
-        <h3>Automation Tools</h3>
-        <p>Developing custom scripts for workflow optimization and game mod management.</p>
-      </div>
     </div>
   </section>
 
   <section id="game-configs">
     <div class="grid">
-      <div class="card">
-        <h3>Source Engine Config</h3>
-        <p>Optimized settings for Source Engine games including autoexec and video configs.</p>
-      </div>
-      <div class="card">
+      <a href="https://raw.githubusercontent.com/hellold6/hellold6.github.io/refs/heads/main/TF2%20bind/tf2_autoexec.cfg" target="_blank" class="card">
+        <h3>TF2 Binds</h3>
+        <p>Team Fortress 2 custom key binds.</p>
+      </a>
+      <a href="https://raw.githubusercontent.com/hellold6/hellold6.github.io/refs/heads/main/CS2%20bind/autoexec.cfg" class="card">
         <h3>CS2 Binds</h3>
-        <p>Custom key binds and scripts for Counter-Strike 2 gameplay enhancement.</p>
-      </div>
+        <p>Counter-Strike 2 custom key binds.</p>
+      </a>
     </div>
   </section>
 
@@ -233,7 +229,8 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 <script>
 /* MUSIC LOGIC */
 const playlist = [
-  'Audio Crime - Atomic Amnesia.m4a'
+  "Audio Crime - Atomic Amnesia.m4a",
+  "Marino - I'm Doing Fine (Official AMV).m4a"
 ]; 
 
 let audioStarted = false;
