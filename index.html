@@ -78,6 +78,21 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
 .logo span { color: var(--accent); transition: all 0.3s; }
 
 .hero { padding: 8rem 0 4rem; }
+.hero-pfp {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  margin-bottom: 1.5rem;
+  display: block;
+  object-fit: cover;
+  background: var(--surface);
+}
+video {
+  user-select: none;
+  -webkit-user-drag: none;
+  outline: none;
+}
 .hero-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--accent); margin-bottom: 1rem; }
 .hero-title { font-family: var(--display); font-size: clamp(3.5rem, 12vw, 7rem); line-height: 0.85; letter-spacing: -4px; margin-bottom: 2rem; }
 .hero-desc { max-width: 500px; color: var(--muted); font-size: 14px; margin-bottom: 3rem; }
@@ -146,8 +161,8 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   pointer-events: auto;
 }
 #projects .grid {
-  grid-template-columns: 1fr;
-  max-width: 400px;
+  grid-template-columns: 1fr 1fr;
+  max-width: 850px;
   margin: 0 auto 4rem;
 }
 
@@ -184,12 +199,16 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
   <nav>
     <a href="#" class="logo"><span>//</span> hellold</a>
     <div style="display:flex; gap: 20px;">
+      <a href="identity.html" style="color:var(--muted); text-decoration:none; font-size:11px;">identity</a>
       <a href="https://github.com/hellold6" style="color:var(--muted); text-decoration:none; font-size:11px;">github</a>
       <a href="mailto:wr731642@gmail.com" style="color:var(--muted); text-decoration:none; font-size:11px;">contact</a>
     </div>
   </nav>
 
   <section class="hero">
+    <video class="hero-pfp" width="100" height="100" autoplay loop muted playsinline disablePictureInPicture style="pointer-events: none;" preload="auto" poster="pride-profile-1776514962007-static.png" aria-label="hellold pfp">
+      <source src="pride-profile.mp4" type="video/mp4">
+    </video>
     <div class="hero-tag">Developer & Modder // NSW, AU</div>
     <h1 class="hero-title">HELLOLD<br><span style="color:var(--muted)">EST. 2010</span></h1>
     <p class="hero-desc">
@@ -209,6 +228,10 @@ nav { padding: 2rem 0; display: flex; justify-content: space-between; align-item
       <a href="https://github.com/hellold6/CS2Lineups" class="card">
         <h3>CS2 Lineups</h3>
         <p>A grenade lineup generator leveraging ValveResourceFormat to parse game data directly.</p>
+      </a>
+      <a href="identity.html" class="card">
+        <h3>Identity</h3>
+        <p>Sexuality, gender, pronouns, and preference info page.</p>
       </a>
     </div>
   </section>
@@ -331,6 +354,7 @@ function setupMusicControls() {
 let input = '';
 window.addEventListener('keydown', (e) => {
   input += e.key.toLowerCase();
+  if (input.length > 32) input = input.slice(-32);
   if (input.includes('teto')) {
     document.documentElement.style.setProperty('--accent', 'var(--teto-pink)');
     input = '';

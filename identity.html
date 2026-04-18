@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hellold // identity</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08080a;
+  --surface: #101013;
+  --border: rgba(255,255,255,0.06);
+  --text: #e8e8ea;
+  --muted: #6a6a7a;
+  --accent: #e8734a;
+  --mono: 'JetBrains Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.container { max-width: 850px; margin: 0 auto; padding: 0 2rem; }
+nav {
+  padding: 2rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.logo {
+  font-family: var(--display);
+  font-size: 20px;
+  text-decoration: none;
+  color: var(--text);
+  letter-spacing: -1px;
+}
+.logo span { color: var(--accent); }
+
+.page { padding: 4rem 0; }
+.page-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  margin-bottom: 1rem;
+}
+.page-title {
+  font-family: var(--display);
+  font-size: clamp(2.2rem, 9vw, 4.8rem);
+  line-height: 0.9;
+  letter-spacing: -2px;
+  margin-bottom: 1.5rem;
+}
+.page-desc {
+  max-width: 640px;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1.25rem;
+}
+
+.card h3 {
+  font-family: var(--display);
+  font-size: 18px;
+  margin-bottom: 0.75rem;
+}
+
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: 0.5rem 1rem; }
+.k { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.15em; }
+.v { color: var(--text); }
+
+footer {
+  padding: 3rem 0;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+@media (max-width: 700px) {
+  .container { padding: 0 1rem; }
+  nav { flex-wrap: wrap; gap: 0.8rem; justify-content: center; text-align: center; }
+  .page { padding: 3rem 0; }
+  .grid { grid-template-columns: 1fr; }
+  .kv { grid-template-columns: 1fr; }
+  footer { flex-direction: column; gap: 0.5rem; text-align: center; }
+}
+</style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="index.html" class="logo"><span>//</span> hellold</a>
+      <div style="display:flex; gap: 20px;">
+        <a href="index.html" style="color:var(--muted); text-decoration:none; font-size:11px;">home</a>
+        <a href="https://github.com/hellold6" style="color:var(--muted); text-decoration:none; font-size:11px;">github</a>
+      </div>
+    </nav>
+
+    <main class="page">
+      <div class="page-tag">Sexuality & Gender</div>
+      <h1 class="page-title">Identity<br><span style="color:var(--muted)">Info Page</span></h1>
+      <p class="page-desc">
+        Personal identity references and notes.
+      </p>
+
+      <section class="grid">
+        <article class="card">
+          <h3>Gender</h3>
+          <div class="kv">
+            <div class="k">Identity</div><div class="v">Transgender girl</div>
+            <div class="k">Expression</div><div class="v">Feminine</div>
+            <div class="k">Pronouns</div><div class="v">she/her</div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>Sexuality</h3>
+          <div class="kv">
+            <div class="k">Orientation</div><div class="v">Lesbian</div>
+            <div class="k">Romantic</div><div class="v">Polyamorous</div>
+            <div class="k">Labels</div><div class="v">Lesbian, queer, fag — all fine</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="card">
+        <h3>Boundaries & Preferences</h3>
+        <div class="kv">
+          <div class="k">Use</div><div class="v">Willow, she/her</div>
+          <div class="k">Avoid</div><div class="v">William, he/him, deadname</div>
+          <div class="k">Visibility</div><div class="v">Friends-only</div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>© 2026 HELLOLD</span>
+      <span>IDENTITY PAGE</span>
+    </footer>
+  </div>
+</body>
+</html>
