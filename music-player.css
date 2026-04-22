@@ -1,0 +1,118 @@
+.music-player {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: none;
+  width: min(88vw, 340px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  background: #101013;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  z-index: 2000;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.music-player .meta {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6a6a7a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-player .controls-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.music-player .progress-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.music-player button,
+.music-player a {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #e8e8ea;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.music-player button:hover,
+.music-player a:hover,
+.music-player button:focus-visible,
+.music-player a:focus-visible {
+  color: #e8734a;
+  background: rgba(232,115,74,0.08);
+  outline: none;
+}
+
+.music-player .is-active {
+  color: #e8734a;
+}
+
+.music-player input[type="range"] {
+  width: 100%;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 16px;
+}
+
+.music-player input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+}
+
+.music-player input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #e8734a;
+  border: 0;
+}
+
+.music-player input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+}
+
+.music-player input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: #e8734a;
+}
+
+@media (max-width: 600px) {
+  .music-player {
+    right: 12px;
+    bottom: 12px;
+    width: min(88vw, 300px);
+  }
+}

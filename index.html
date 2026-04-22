@@ -10,6 +10,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
 <link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="music-player.css">
 <style>
 :root {
   --bg: #08080a;
@@ -113,53 +114,6 @@ video {
 .card h3 { font-family: var(--display); font-size: 18px; margin-bottom: 0.5rem; }
 .card p { color: var(--muted); font-size: 12px; }
 
-#music-hud {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 10px 15px;
-  font-size: 12px;
-  text-transform: uppercase;
-  display: none;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  max-width: 560px;
-  width: auto;
-}
-
-#music-hud button {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-
-#music-hud button:hover {
-  border-color: var(--accent);
-}
-
-#music-hud .progress {
-  width: 130px;
-  margin-left: 10px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-#music-hud:hover .progress {
-  opacity: 1;
-  pointer-events: auto;
-}
 #projects .grid {
   grid-template-columns: 1fr 1fr;
   max-width: 850px;
@@ -180,9 +134,6 @@ video {
   .stat:last-child { border-bottom: none; }
   .grid { grid-template-columns: 1fr; justify-items: center; }
   .card { padding: 1.25rem; }
-  #music-hud { left: 12px; right: 12px; padding: 12px; gap: 8px; justify-content: center; }
-  #music-hud button { font-size: 13px; padding: 8px 12px; }
-  #music-hud .progress { opacity: 1; width: 100%; margin-left: 0; pointer-events: auto; }
 }
 </style>
 </head>
@@ -255,57 +206,39 @@ video {
   </footer>
 </div>
 
-<div id="music-hud">
-  ♪ <span id="track-name">...</span>
-  <button id="play-pause">PAUSE</button>
-  <button id="volume-down">VOL-</button>
-  <button id="volume-up">VOL+</button>
-  <input type="range" class="progress" id="progress" min="0" max="100" value="0">
+<div id="music-player" class="music-player" aria-label="Music player">
+  <div id="music-meta" class="meta">Now Playing</div>
+  <div class="controls-row">
+    <button id="music-play" type="button" aria-label="Play or pause">▶</button>
+    <div class="progress-wrap">
+      <input type="range" id="music-seek" min="0" max="100" value="0" aria-label="Track progress">
+    </div>
+    <a id="music-download" href="#" aria-label="Download" title="Download">⇩</a>
+    <button id="music-next" type="button" aria-label="Next track">⏭</button>
+    <button id="music-loop" type="button" aria-label="Toggle loop">↻</button>
+    <button id="music-mute" type="button" aria-label="Mute or unmute">🔊</button>
+  </div>
 </div>
 
+<script src="music-player.js"></script>
 <script>
-/* MUSIC LOGIC */
-const playlist = [
-  { file: "Audio Crime - Atomic Amnesia.m4a", name: "Atomic Amnesia" },
-  { file: "Marino - I'm Doing Fine (Official AMV).m4a", name: "I'm Doing Fine" }
-]; 
-
-let audioStarted = false;
-let player;
-
 function initSite() {
-  // Fade out splash screen
   const splash = document.getElementById('splash-screen');
-  splash.classList.add('fade-out');
-  
-  // Start music with fade-in
-  if (audioStarted || playlist.length === 0) return;
-  
-  const track = playlist[Math.floor(Math.random() * playlist.length)];
-  player = new Audio(track.file);
-  player.volume = 0;
-  
-  player.play().then(() => {
-    document.getElementById('music-hud').style.display = 'flex';
-    // Clean up the display name for the HUD
-    document.getElementById('track-name').innerText = track.name;
-    audioStarted = true;
-    console.log("Audio started: Atomic Amnesia");
-    
-    // Fade in volume
-    const fadeIn = setInterval(() => {
-      if (player.volume < 0.25) {
-        player.volume += 0.01;
-      } else {
-        clearInterval(fadeIn);
-      }
-    }, 50);
-    
-    // Add controls
-    setupMusicControls();
-  }).catch(e => {
-    console.log("Waiting for interaction...");
-  });
+  if (splash) {
+    splash.classList.add('fade-out');
+  }
+
+  if (window.helloldMusic) {
+    window.helloldMusic.startFromUserGesture();
+    if (splash) {
+      splash.addEventListener('transitionend', function handler() {
+        splash.removeEventListener('transitionend', handler);
+        window.helloldMusic.show();
+      });
+    } else {
+      window.helloldMusic.show();
+    }
+  }
 }
 
 // Triggers on any first movement/click
@@ -313,41 +246,9 @@ function initSite() {
   window.addEventListener(event, initSite, { once: true });
 });
 
-document.getElementById('splash-screen').addEventListener('click', initSite, { once: true });
-
-function setupMusicControls() {
-  const playPauseBtn = document.getElementById('play-pause');
-  const volumeDownBtn = document.getElementById('volume-down');
-  const volumeUpBtn = document.getElementById('volume-up');
-  const progressBar = document.getElementById('progress');
-  
-  playPauseBtn.addEventListener('click', () => {
-    if (player.paused) {
-      player.play();
-      playPauseBtn.textContent = 'PAUSE';
-    } else {
-      player.pause();
-      playPauseBtn.textContent = 'PLAY';
-    }
-  });
-  
-  volumeDownBtn.addEventListener('click', () => {
-    player.volume = Math.max(0, player.volume - 0.1);
-  });
-  
-  volumeUpBtn.addEventListener('click', () => {
-    player.volume = Math.min(1, player.volume + 0.1);
-  });
-  
-  player.addEventListener('timeupdate', () => {
-    const percent = (player.currentTime / player.duration) * 100;
-    progressBar.value = percent;
-  });
-  
-  progressBar.addEventListener('input', () => {
-    const time = (progressBar.value / 100) * player.duration;
-    player.currentTime = time;
-  });
+const splashElement = document.getElementById('splash-screen');
+if (splashElement) {
+  splashElement.addEventListener('click', initSite, { once: true });
 }
 
 /* TETO EGG */

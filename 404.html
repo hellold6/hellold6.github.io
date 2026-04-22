@@ -10,6 +10,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
 <link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="music-player.css">
 <style>
 :root {
   --bg: #08080a;
@@ -153,6 +154,21 @@ footer {
   </footer>
 </div>
 
+<div id="music-player" class="music-player" aria-label="Music player">
+  <div id="music-meta" class="meta">Now Playing</div>
+  <div class="controls-row">
+    <button id="music-play" type="button" aria-label="Play or pause">▶</button>
+    <div class="progress-wrap">
+      <input type="range" id="music-seek" min="0" max="100" value="0" aria-label="Track progress">
+    </div>
+    <a id="music-download" href="#" aria-label="Download" title="Download">⇩</a>
+    <button id="music-next" type="button" aria-label="Next track">⏭</button>
+    <button id="music-loop" type="button" aria-label="Toggle loop">↻</button>
+    <button id="music-mute" type="button" aria-label="Mute or unmute">🔊</button>
+  </div>
+</div>
+
+<script src="music-player.js"></script>
 <script>
 document.getElementById('path-display').textContent = window.location.pathname || '/???';
 

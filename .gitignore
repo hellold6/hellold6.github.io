@@ -1,0 +1,14 @@
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Editor/IDE artifacts
+.vscode/*.log
+
+# Local debug browser profile created by launch.json
+.vscode/opera-gx-debug-profile/
+
+# Build/runtime leftovers
+*.tmp
+*.temp
+*.cache

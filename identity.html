@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>hellold // identity</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="music-player.css">
 <style>
 :root {
   --bg: #08080a;
@@ -100,6 +101,24 @@ footer {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+.censored {
+  color: transparent;
+  background: var(--muted);
+  border-radius: 3px;
+  padding: 0 0.3em;
+  filter: blur(4px);
+  transition: color 0.2s ease, background-color 0.2s ease, filter 0.2s ease;
+  user-select: none;
+}
+
+.censored:hover,
+.censored:focus {
+  color: var(--text);
+  background: transparent;
+  filter: blur(0);
+  user-select: text;
+}
+
 @media (max-width: 700px) {
   .container { padding: 0 1rem; }
   nav { flex-wrap: wrap; gap: 0.8rem; justify-content: center; text-align: center; }
@@ -142,7 +161,7 @@ a:hover { text-decoration: underline; }
           <div class="kv">
             <div class="k">Orientation</div><div class="v">Lesbian</div>
             <div class="k">Romantic</div><div class="v">Polyamorous</div>
-            <div class="k">Labels</div><div class="v">Lesbian, queer, fag — all fine</div>
+            <div class="k">Labels</div><div class="v">Lesbian, queer, faggot</div>
           </div>
         </article>
       </section>
@@ -151,8 +170,7 @@ a:hover { text-decoration: underline; }
         <h3>Boundaries & Preferences</h3>
         <div class="kv">
           <div class="k">Use</div><div class="v">Willow, she/her</div>
-          <div class="k">Avoid</div><div class="v">William, he/him, deadname</div>
-          <div class="k">Visibility</div><div class="v">Friends-only</div>
+          <div class="k">Avoid</div><div class="v"><span class="censored" tabindex="0">William, he/him</span></div>
         </div>
       </section>
     </main>
@@ -162,5 +180,21 @@ a:hover { text-decoration: underline; }
       <span>IDENTITY PAGE</span>
     </footer>
   </div>
+
+  <div id="music-player" class="music-player" aria-label="Music player">
+    <div id="music-meta" class="meta">Now Playing</div>
+    <div class="controls-row">
+      <button id="music-play" type="button" aria-label="Play or pause">▶</button>
+      <div class="progress-wrap">
+        <input type="range" id="music-seek" min="0" max="100" value="0" aria-label="Track progress">
+      </div>
+      <a id="music-download" href="#" aria-label="Download" title="Download">⇩</a>
+      <button id="music-next" type="button" aria-label="Next track">⏭</button>
+      <button id="music-loop" type="button" aria-label="Toggle loop">↻</button>
+      <button id="music-mute" type="button" aria-label="Mute or unmute">🔊</button>
+    </div>
+  </div>
+
+  <script src="music-player.js"></script>
 </body>
 </html>
