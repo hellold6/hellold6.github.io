@@ -111,8 +111,11 @@
 
 @media (max-width: 600px) {
   .music-player {
-    right: 12px;
+    left: 50%;
+    right: auto;
     bottom: 12px;
-    width: min(88vw, 300px);
+    transform: translateX(-50%);
+    width: min(calc(100vw - 24px), 360px);
+    padding: 10px;
   }
 }

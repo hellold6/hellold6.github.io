@@ -72,16 +72,18 @@ body {
   font-size: 13px; line-height: 1.6; overflow-x: hidden; cursor: default;
 }
 
-.container { max-width: 850px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 2; }
+.container { width: min(100% - 2rem, 850px); margin: 0 auto; position: relative; z-index: 2; }
 
 nav { padding: 2rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
 .logo { font-family: var(--display); font-size: 20px; text-decoration: none; color: var(--text); letter-spacing: -1px; }
 .logo span { color: var(--accent); transition: all 0.3s; }
+.nav-links { display: flex; gap: 20px; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: 11px; }
 
-.hero { padding: 8rem 0 4rem; }
+.hero { padding: clamp(4.5rem, 10vw, 8rem) 0 clamp(2.5rem, 5vw, 4rem); }
 .hero-pfp {
-  width: 100px;
-  height: 100px;
+  width: clamp(86px, 16vw, 100px);
+  height: clamp(86px, 16vw, 100px);
   border-radius: 50%;
   border: 2px solid var(--accent);
   margin-bottom: 1.5rem;
@@ -120,20 +122,33 @@ video {
   margin: 0 auto 4rem;
 }
 
+.site-footer {
+  padding: 4rem 0;
+  color: var(--muted);
+  font-size: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 @media (max-width: 600px) {
-  .container { padding: 0 1rem; text-align: center; }
+  .container { width: min(100% - 1.5rem, 850px); text-align: center; }
   nav { flex-wrap: wrap; gap: 1rem; padding: 1.5rem 0; justify-content: center; }
-  nav > div { display: flex; justify-content: center; width: 100%; }
-  .hero { padding: 6rem 0 2.5rem; }
+  .nav-links { justify-content: center; width: 100%; flex-wrap: wrap; gap: 0.9rem 1.2rem; }
+  .hero { padding: 5rem 0 2.5rem; }
+  .hero-pfp { margin-left: auto; margin-right: auto; }
   .hero-tag,
   .hero-title,
   .hero-desc { text-align: center; margin-left: auto; margin-right: auto; }
-  .hero-desc { max-width: 100%; font-size: 13px; }
+  .hero-title { letter-spacing: -2px; font-size: clamp(2.4rem, 13vw, 3.5rem); }
+  .hero-desc { max-width: 42ch; font-size: 13px; }
   .stats { flex-direction: column; align-items: center; }
   .stat { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
   .stat:last-child { border-bottom: none; }
   .grid { grid-template-columns: 1fr; justify-items: center; }
-  .card { padding: 1.25rem; }
+  .card { padding: 1.25rem; width: 100%; max-width: 470px; text-align: center; }
+  .site-footer { flex-direction: column; align-items: center; text-align: center; gap: 0.35rem; }
 }
 </style>
 </head>
@@ -149,10 +164,10 @@ video {
 <div class="container">
   <nav>
     <a href="#" class="logo"><span>//</span> hellold</a>
-    <div style="display:flex; gap: 20px;">
-      <a href="identity.html" style="color:var(--muted); text-decoration:none; font-size:11px;">identity</a>
-      <a href="https://github.com/hellold6" style="color:var(--muted); text-decoration:none; font-size:11px;">github</a>
-      <a href="mailto:wr731642@gmail.com" style="color:var(--muted); text-decoration:none; font-size:11px;">contact</a>
+    <div class="nav-links">
+      <a href="identity.html">identity</a>
+      <a href="https://github.com/hellold6">github</a>
+      <a href="mailto:wr731642@gmail.com">contact</a>
     </div>
   </nav>
 
@@ -200,7 +215,7 @@ video {
     </div>
   </section>
 
-  <footer style="padding: 4rem 0; color: var(--muted); font-size: 10px; border-top: 1px solid var(--border); display: flex; justify-content: space-between;">
+  <footer class="site-footer">
     <span>© 2026 HELLOLD</span>
     <span>YEAR 11 // NSW</span>
   </footer>
