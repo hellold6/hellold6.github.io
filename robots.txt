@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://hellold6.github.io/sitemap.xml
