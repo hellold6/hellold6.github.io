@@ -1,7 +1,6 @@
 (function () {
   const playlist = [
-    { file: "Audio Crime - Atomic Amnesia.m4a", name: "Atomic Amnesia" },
-    { file: "Marino - I'm Doing Fine (Official AMV).m4a", name: "I'm Doing Fine" }
+    { file: "Audio Crime - Atomic Amnesia.m4a", name: "Atomic Amnesia" }
   ];
 
   const STATE_KEY = "hellold.music.state.v2";
