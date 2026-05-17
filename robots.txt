@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
+Disallow: /sociogram_v3.html
 Sitemap: https://hellold6.github.io/sitemap.xml
