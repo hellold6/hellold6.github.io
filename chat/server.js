@@ -6,12 +6,15 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 
 const {
   DATABASE_URL,
   JWT_SECRET,
   ADMIN_PASSWORD,
   ALLOWED_ORIGIN, // e.g. https://hellold6.github.io
+  DISCORD_BOT_TOKEN,
+  DISCORD_OWNER_ID,
   PORT = 3000,
 } = process.env;
 
@@ -158,23 +161,42 @@ io.use((socket, next) => {
   }
 });
 
+// Shared paths so the admin dashboard, the Discord bot, and (later) anything
+// else all go through the same insert + broadcast logic.
+
+async function deliverUserMessage(userId, username, content) {
+  const trimmed = content.trim().slice(0, 4000);
+  const result = await pool.query(
+    'INSERT INTO messages (user_id, sender, content) VALUES ($1, $2, $3) RETURNING content, created_at',
+    [userId, 'user', trimmed]
+  );
+  const payload = { sender: 'user', ...result.rows[0] };
+  io.to(`user-${userId}`).emit('message', payload);
+  io.to('admin-room').emit('new-message', { userId, username, ...payload });
+  notifyDiscordNewMessage(userId, username, trimmed).catch((err) => console.error('Discord notify failed:', err));
+  return payload;
+}
+
+async function deliverAdminReply(userId, content) {
+  const trimmed = content.trim().slice(0, 4000);
+  const result = await pool.query(
+    'INSERT INTO messages (user_id, sender, content) VALUES ($1, $2, $3) RETURNING content, created_at',
+    [userId, 'admin', trimmed]
+  );
+  const payload = { sender: 'admin', ...result.rows[0] };
+  io.to(`user-${userId}`).emit('message', payload);
+  return payload;
+}
+
 io.on('connection', (socket) => {
   const { role } = socket.auth;
 
   if (role === 'user') {
-    const room = `user-${socket.auth.id}`;
-    socket.join(room);
+    socket.join(`user-${socket.auth.id}`);
 
     socket.on('message', async (content) => {
       if (!content || typeof content !== 'string' || !content.trim()) return;
-      const trimmed = content.trim().slice(0, 4000);
-      const result = await pool.query(
-        'INSERT INTO messages (user_id, sender, content) VALUES ($1, $2, $3) RETURNING content, created_at',
-        [socket.auth.id, 'user', trimmed]
-      );
-      const payload = { sender: 'user', ...result.rows[0] };
-      io.to(room).emit('message', payload);
-      io.to('admin-room').emit('new-message', { userId: socket.auth.id, username: socket.auth.username, ...payload });
+      await deliverUserMessage(socket.auth.id, socket.auth.username, content);
     });
   }
 
@@ -183,17 +205,87 @@ io.on('connection', (socket) => {
 
     socket.on('message', async ({ userId, content }) => {
       if (!userId || !content || !content.trim()) return;
-      const trimmed = content.trim().slice(0, 4000);
-      const result = await pool.query(
-        'INSERT INTO messages (user_id, sender, content) VALUES ($1, $2, $3) RETURNING content, created_at',
-        [userId, 'admin', trimmed]
-      );
-      const payload = { sender: 'admin', ...result.rows[0] };
-      io.to(`user-${userId}`).emit('message', payload);
+      const payload = await deliverAdminReply(userId, content);
       socket.emit('message-sent', { userId, ...payload });
     });
   }
 });
+
+// ---------- Discord bot: DM notifications + two-way replies ----------
+
+let discordReady = false;
+const dmMessageToUserId = new Map(); // Discord DM message id -> chat user id
+
+let discordClient = null;
+
+if (DISCORD_BOT_TOKEN && DISCORD_OWNER_ID) {
+  discordClient = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages, GatewayIntentBits.MessageContent],
+    partials: [Partials.Channel, Partials.Message],
+  });
+
+  discordClient.once('ready', () => {
+    discordReady = true;
+    console.log(`Discord bot logged in as ${discordClient.user.tag}`);
+  });
+
+  discordClient.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.author.id !== DISCORD_OWNER_ID) return;
+    if (message.guild) return; // only act on DMs to the bot
+
+    try {
+      // Option A: reply directly to a notification DM to route it to that visitor.
+      const repliedToId = message.reference?.messageId;
+      if (repliedToId && dmMessageToUserId.has(repliedToId)) {
+        const userId = dmMessageToUserId.get(repliedToId);
+        await deliverAdminReply(userId, message.content);
+        await message.react('✅');
+        return;
+      }
+
+      // Option B: "reply <username> <message>" for conversations without a recent DM.
+      const match = message.content.match(/^reply\s+(\S+)\s+([\s\S]+)$/i);
+      if (match) {
+        const [, username, text] = match;
+        const result = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+        if (!result.rows[0]) {
+          await message.reply(`Couldn't find a user called "${username}".`);
+          return;
+        }
+        await deliverAdminReply(result.rows[0].id, text);
+        await message.react('✅');
+        return;
+      }
+
+      await message.reply(
+        "Reply directly to one of my notification messages, or use: `reply <username> <message>`"
+      );
+    } catch (err) {
+      console.error('Discord reply handling failed:', err);
+      message.reply('Something went wrong sending that.').catch(() => {});
+    }
+  });
+
+  discordClient.login(DISCORD_BOT_TOKEN).catch((err) => {
+    console.error('Discord login failed:', err);
+  });
+} else {
+  console.log('Discord bot not configured (DISCORD_BOT_TOKEN / DISCORD_OWNER_ID missing) — skipping.');
+}
+
+async function notifyDiscordNewMessage(userId, username, content) {
+  if (!discordReady) return;
+  const owner = await discordClient.users.fetch(DISCORD_OWNER_ID);
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: username })
+    .setDescription(content)
+    .setFooter({ text: `Reply to this message, or use: reply ${username} <message>` })
+    .setColor(0x6c5ce7)
+    .setTimestamp();
+  const sent = await owner.send({ embeds: [embed] });
+  dmMessageToUserId.set(sent.id, userId);
+}
 
 migrate()
   .then(() => {
