@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Admin</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6e6e6; margin: 0; }
+  #login-card {
+    max-width: 380px; margin: 15vh auto; background: #171a23; border: 1px solid #2a2e3a;
+    border-radius: 14px; padding: 28px;
+  }
+  #login-card input { width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #33384a; background: #0f1117; color: #e6e6e6; }
+  #login-card button, .composer button { width: 100%; padding: 10px; border-radius: 8px; border: none; background: #6c5ce7; color: white; font-weight: 600; cursor: pointer; }
+  .error { color: #ff7675; font-size: 0.85rem; min-height: 1em; margin-bottom: 8px; }
+
+  #dashboard { display: none; height: 100vh; }
+  .layout { display: flex; height: 100%; }
+  #conversations { width: 280px; border-right: 1px solid #2a2e3a; overflow-y: auto; flex-shrink: 0; }
+  .conv-item { padding: 14px 16px; border-bottom: 1px solid #1e2129; cursor: pointer; }
+  .conv-item:hover, .conv-item.active { background: #1c2029; }
+  .conv-item .name { font-weight: 600; font-size: 0.95rem; }
+  .conv-item .preview { font-size: 0.8rem; color: #9aa0ae; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chat-panel { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; }
+  #chat-header { font-weight: 600; padding-bottom: 12px; border-bottom: 1px solid #2a2e3a; margin-bottom: 12px; }
+  #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+  .msg { max-width: 70%; padding: 8px 12px; border-radius: 12px; font-size: 0.92rem; white-space: pre-wrap; word-break: break-word; }
+  .msg.admin { align-self: flex-end; background: #6c5ce7; color: white; }
+  .msg.user { align-self: flex-start; background: #262a38; }
+  .composer { display: flex; gap: 8px; margin-top: 12px; }
+  .composer input { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #33384a; background: #0f1117; color: #e6e6e6; }
+  .composer button { width: auto; padding: 10px 18px; }
+  .empty { color: #9aa0ae; margin: auto; }
+</style>
+</head>
+<body>
+
+<div id="login-card">
+  <h2>Admin Login</h2>
+  <div class="error" id="login-error"></div>
+  <input id="password" type="password" placeholder="Admin password" autocomplete="current-password" />
+  <button id="login-btn">Log in</button>
+</div>
+
+<div id="dashboard">
+  <div class="layout">
+    <div id="conversations"></div>
+    <div id="chat-panel">
+      <div id="chat-header">Select a conversation</div>
+      <div id="messages"><div class="empty">Pick someone from the list to see messages.</div></div>
+      <div class="composer" id="composer" style="display:none;">
+        <input id="message-input" type="text" placeholder="Reply..." />
+        <button id="send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  // ⚠️ Set this to your deployed backend URL (same as chat.html).
+  const API_BASE = "https://YOUR-BACKEND-URL.onrender.com";
+
+  let token = localStorage.getItem("admin_token");
+  let socket = null;
+  let activeUserId = null;
+  let conversations = [];
+
+  const loginCard = document.getElementById("login-card");
+  const dashboard = document.getElementById("dashboard");
+  const loginError = document.getElementById("login-error");
+
+  document.getElementById("login-btn").onclick = async () => {
+    const password = document.getElementById("password").value;
+    loginError.textContent = "";
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { loginError.textContent = data.error || "Login failed."; return; }
+      token = data.token;
+      localStorage.setItem("admin_token", token);
+      startDashboard();
+    } catch {
+      loginError.textContent = "Couldn't reach the server.";
+    }
+  };
+
+  async function loadConversations() {
+    const res = await fetch(`${API_BASE}/api/admin/conversations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) { logout(); return; }
+    conversations = await res.json();
+    renderConversationList();
+  }
+
+  function renderConversationList() {
+    const el = document.getElementById("conversations");
+    el.innerHTML = "";
+    conversations.forEach((c) => {
+      const div = document.createElement("div");
+      div.className = "conv-item" + (c.id === activeUserId ? " active" : "");
+      div.innerHTML = `<div class="name">${escapeHtml(c.username)}</div><div class="preview">${escapeHtml(c.last_message || "No messages yet")}</div>`;
+      div.onclick = () => openConversation(c.id, c.username);
+      el.appendChild(div);
+    });
+  }
+
+  async function openConversation(userId, username) {
+    activeUserId = userId;
+    renderConversationList();
+    document.getElementById("chat-header").textContent = username;
+    document.getElementById("composer").style.display = "flex";
+    const res = await fetch(`${API_BASE}/api/admin/messages/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const msgs = await res.json();
+    const messagesEl = document.getElementById("messages");
+    messagesEl.innerHTML = "";
+    msgs.forEach(renderMessage);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function renderMessage(m) {
+    const messagesEl = document.getElementById("messages");
+    const div = document.createElement("div");
+    div.className = `msg ${m.sender}`;
+    div.textContent = m.content;
+    messagesEl.appendChild(div);
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function startDashboard() {
+    loginCard.style.display = "none";
+    dashboard.style.display = "block";
+    loadConversations();
+
+    socket = io(API_BASE, { auth: { token } });
+    socket.on("new-message", ({ userId }) => {
+      loadConversations();
+      if (userId === activeUserId) openConversation(userId, currentName());
+    });
+    socket.on("message-sent", (m) => {
+      if (m.userId === activeUserId) renderMessage({ sender: "admin", content: m.content });
+    });
+    socket.on("connect_error", () => logout());
+  }
+
+  function currentName() {
+    const c = conversations.find((c) => c.id === activeUserId);
+    return c ? c.username : "";
+  }
+
+  function logout() {
+    localStorage.removeItem("admin_token");
+    token = null;
+    dashboard.style.display = "none";
+    loginCard.style.display = "block";
+  }
+
+  function sendMessage() {
+    const input = document.getElementById("message-input");
+    const content = input.value;
+    if (!content.trim() || !activeUserId || !socket) return;
+    socket.emit("message", { userId: activeUserId, content });
+    input.value = "";
+  }
+  document.getElementById("send-btn").onclick = sendMessage;
+  document.getElementById("message-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+  if (token) startDashboard();
+</script>
+</body>
+</html>
