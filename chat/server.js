@@ -283,6 +283,8 @@ async function attachLinkPreview(messageId, content, rooms) {
 // Shared paths so the admin dashboard, the Discord bot, and the REST upload
 // endpoint all go through the same insert + broadcast logic.
 
+let lastActiveConversation = null; // { userId, username } — whoever messaged most recently
+
 async function deliverUserMessage(userId, username, content, type = 'text') {
   const trimmed = content.trim().slice(0, 4000);
   const result = await pool.query(
@@ -290,6 +292,7 @@ async function deliverUserMessage(userId, username, content, type = 'text') {
     [userId, 'user', type, trimmed]
   );
   const payload = { sender: 'user', ...result.rows[0] };
+  lastActiveConversation = { userId, username };
   io.to(`user-${userId}`).emit('message', payload);
   io.to('admin-room').emit('new-message', { userId, username, ...payload });
   notifyDiscordNewMessage(userId, username, payload).catch((err) => console.error('Discord notify failed:', err));
@@ -363,6 +366,7 @@ if (DISCORD_BOT_TOKEN && DISCORD_OWNER_ID) {
 
     try {
       let targetUserId = null;
+      let targetUsername = null;
 
       const repliedToId = message.reference?.messageId;
       if (repliedToId && dmMessageToUserId.has(repliedToId)) {
@@ -384,13 +388,16 @@ if (DISCORD_BOT_TOKEN && DISCORD_OWNER_ID) {
         }
       }
 
+      // Fall back to whoever messaged most recently, so a plain reply with no
+      // quote and no command still goes somewhere sensible.
+      if (!targetUserId && lastActiveConversation) {
+        targetUserId = lastActiveConversation.userId;
+        targetUsername = lastActiveConversation.username;
+      }
+
       if (!targetUserId) {
-        if (message.attachments.size > 0) {
-          await message.reply('Reply to one of my notifications (or use `reply <username>`) so I know who this image is for.');
-          return;
-        }
         await message.reply(
-          "Reply directly to one of my notification messages, or use: `reply <username> <message>`"
+          "No conversations yet. Once someone messages you, plain replies will go to them automatically — or use: `reply <username> <message>`"
         );
         return;
       }
@@ -403,7 +410,7 @@ if (DISCORD_BOT_TOKEN && DISCORD_OWNER_ID) {
           await deliverAdminReply(targetUserId, attachment.url, 'image');
         }
       }
-      await message.react('✅');
+      await message.react(targetUsername ? '👉' : '✅');
     } catch (err) {
       console.error('Discord reply handling failed:', err);
       message.reply('Something went wrong sending that.').catch(() => {});
