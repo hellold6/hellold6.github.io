@@ -58,9 +58,19 @@
   .msg { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
   .msg.user { align-self: flex-end; background: #6c5ce7; color: white; border-bottom-right-radius: 2px; }
   .msg.admin { align-self: flex-start; background: #262a38; border-bottom-left-radius: 2px; }
-  .composer { display: flex; gap: 8px; margin-top: 12px; }
+  .msg img.chat-image { max-width: 100%; max-height: 260px; border-radius: 8px; display: block; cursor: pointer; }
+  .preview-card { max-width: 80%; border: 1px solid #33384a; border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; display: block; background: #1c2029; }
+  .preview-card img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
+  .preview-card .preview-body { padding: 8px 10px; }
+  .preview-card .preview-site { font-size: 0.72rem; color: #9aa0ae; text-transform: uppercase; letter-spacing: 0.03em; }
+  .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
+  .preview-card .preview-desc { font-size: 0.78rem; color: #9aa0ae; margin-top: 2px; }
+  .composer { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
   .composer input { margin-bottom: 0; flex: 1; }
   .composer button { width: auto; padding: 10px 18px; }
+  #image-btn { width: auto; padding: 10px 12px; background: #262a38; font-size: 1.1rem; line-height: 1; }
+  #image-btn:hover { background: #33384a; }
+  #image-input { display: none; }
 </style>
 </head>
 <body>
@@ -80,6 +90,8 @@
   <h1>Chat with Willow</h1>
   <div id="messages"></div>
   <div class="composer">
+    <button id="image-btn" title="Send an image">📷</button>
+    <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" />
     <input id="message-input" type="text" placeholder="Type a message..." />
     <button id="send-btn">Send</button>
   </div>
@@ -88,11 +100,12 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   // ⚠️ Set this to your deployed backend URL (see README).
-  const API_BASE = "https://hellold6-github-io.onrender.com";
+  const API_BASE = "https://YOUR-BACKEND-URL.onrender.com";
 
   let mode = "login"; // or "register"
   let token = localStorage.getItem("chat_token");
   let socket = null;
+  const messageEls = new Map(); // message id -> DOM element, so link previews can attach later
 
   const authCard = document.getElementById("auth-card");
   const chatView = document.getElementById("chat-view");
@@ -103,6 +116,7 @@
   const switchLink = document.getElementById("switch-link");
   const messagesEl = document.getElementById("messages");
   const messageInput = document.getElementById("message-input");
+  const imageInput = document.getElementById("image-input");
 
   switchLink.onclick = () => {
     mode = mode === "login" ? "register" : "login";
@@ -143,15 +157,60 @@
     if (!res.ok) { logout(); return; }
     const msgs = await res.json();
     messagesEl.innerHTML = "";
+    messageEls.clear();
     msgs.forEach(renderMessage);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function renderPreviewCard(preview) {
+    const a = document.createElement("a");
+    a.className = "preview-card";
+    a.href = preview.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.innerHTML = `
+      ${preview.image ? `<img src="${escapeAttr(preview.image)}" loading="lazy" />` : ""}
+      <div class="preview-body">
+        <div class="preview-site">${escapeHtml(preview.siteName || "")}</div>
+        <div class="preview-title">${escapeHtml(preview.title || preview.url)}</div>
+        ${preview.description ? `<div class="preview-desc">${escapeHtml(preview.description)}</div>` : ""}
+      </div>`;
+    return a;
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
   function renderMessage(m) {
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "4px";
+    wrap.style.alignSelf = m.sender === "user" ? "flex-end" : "flex-start";
+    wrap.style.maxWidth = "80%";
+
     const div = document.createElement("div");
     div.className = `msg ${m.sender}`;
-    div.textContent = m.content;
-    messagesEl.appendChild(div);
+    div.style.maxWidth = "100%";
+    if (m.type === "image") {
+      const img = document.createElement("img");
+      img.className = "chat-image";
+      img.src = m.content;
+      img.onclick = () => window.open(m.content, "_blank");
+      div.appendChild(img);
+    } else {
+      div.textContent = m.content;
+    }
+    wrap.appendChild(div);
+
+    if (m.link_preview) {
+      wrap.appendChild(renderPreviewCard(m.link_preview));
+    }
+
+    messagesEl.appendChild(wrap);
+    if (m.id) messageEls.set(m.id, wrap);
   }
 
   function startChat() {
@@ -163,6 +222,10 @@
     socket.on("message", (m) => {
       renderMessage(m);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+    socket.on("message-preview", ({ id, link_preview }) => {
+      const wrap = messageEls.get(id);
+      if (wrap) wrap.appendChild(renderPreviewCard(link_preview));
     });
     socket.on("connect_error", () => { logout(); });
   }
@@ -177,11 +240,39 @@
   function sendMessage() {
     const text = messageInput.value;
     if (!text.trim() || !socket) return;
-    socket.emit("message", text);
+    socket.emit("message", { content: text, type: "text" });
     messageInput.value = "";
   }
   document.getElementById("send-btn").onclick = sendMessage;
   messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+  document.getElementById("image-btn").onclick = () => imageInput.click();
+  imageInput.addEventListener("change", async () => {
+    const file = imageInput.files[0];
+    imageInput.value = "";
+    if (!file || !socket) return;
+    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB."); return; }
+
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ data: base64, mimeType: file.type }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Upload failed."); return; }
+      socket.emit("message", { content: data.url, type: "image" });
+    } catch {
+      alert("Couldn't upload that image.");
+    }
+  });
 
   if (token) startChat();
 </script>
