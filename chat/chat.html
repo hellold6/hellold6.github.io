@@ -2,105 +2,250 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chat with Willow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    --bg: #15111F;
+    --surface: #201A33;
+    --surface-raised: #2A2340;
+    --accent: #F2A154;
+    --accent-ink: #1A1206;
+    --accent-2: #7FD1C3;
+    --text: #F5F1FA;
+    --text-dim: #A99FC2;
+    --border: #322A4A;
+    --radius-lg: 20px;
+    --radius-sm: 12px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: #0f1117;
-    color: #e6e6e6;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: radial-gradient(circle at 20% -10%, #241a3a 0%, var(--bg) 55%);
+    color: var(--text);
     margin: 0;
     display: flex;
     justify-content: center;
-    min-height: 100vh;
+    align-items: center;
+    min-height: 100dvh;
     padding: 24px;
+    padding-top: calc(24px + var(--safe-top));
+    padding-bottom: calc(24px + var(--safe-bottom));
   }
+  h1, .brand { font-family: 'Space Grotesk', system-ui, sans-serif; }
+
+  /* ---------- Auth screen ---------- */
   .card {
-    background: #171a23;
-    border: 1px solid #2a2e3a;
-    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     width: 100%;
-    max-width: 480px;
-    padding: 28px;
+    max-width: 420px;
+    padding: 32px 28px;
     height: fit-content;
+    box-shadow: 0 24px 60px -24px rgba(0,0,0,0.6);
   }
-  h1 { font-size: 1.3rem; margin: 0 0 18px; }
+  .brand { font-size: 1.5rem; font-weight: 700; margin: 0 0 4px; }
+  .tagline { color: var(--text-dim); font-size: 0.92rem; margin: 0 0 24px; line-height: 1.5; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-size: 0.78rem; color: var(--text-dim);
+    margin-bottom: 6px; font-weight: 500;
+  }
   input {
     width: 100%;
-    padding: 10px 12px;
-    margin-bottom: 12px;
-    border-radius: 8px;
-    border: 1px solid #33384a;
-    background: #0f1117;
-    color: #e6e6e6;
-    font-size: 0.95rem;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: #140F20;
+    color: var(--text);
+    font-size: 1rem;
+    font-family: inherit;
   }
+  input:focus { outline: none; border-color: var(--accent); }
   button {
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 13px 14px;
+    border-radius: var(--radius-sm);
     border: none;
-    background: #6c5ce7;
-    color: white;
+    background: var(--accent);
+    color: var(--accent-ink);
     font-weight: 600;
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 0.98rem;
+    font-family: inherit;
+    transition: transform 0.08s ease, filter 0.15s ease;
   }
-  button:hover { background: #5a4bd1; }
-  .switch { margin-top: 12px; font-size: 0.85rem; color: #9aa0ae; text-align: center; }
-  .switch a { color: #a29bfe; cursor: pointer; text-decoration: underline; }
-  .error { color: #ff7675; font-size: 0.85rem; margin: -4px 0 12px; min-height: 1em; }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: scale(0.98); }
+  .switch { margin-top: 16px; font-size: 0.85rem; color: var(--text-dim); text-align: center; }
+  .switch a { color: var(--accent-2); cursor: pointer; text-decoration: none; font-weight: 500; }
+  .switch a:hover { text-decoration: underline; }
+  .error { color: #FF8080; font-size: 0.85rem; margin: -6px 0 14px; min-height: 1em; }
 
-  #chat-view { display: none; flex-direction: column; height: 70vh; }
-  #messages { flex: 1; overflow-y: auto; padding: 4px 4px 12px; display: flex; flex-direction: column; gap: 8px; }
-  .msg { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
-  .msg.user { align-self: flex-end; background: #6c5ce7; color: white; border-bottom-right-radius: 2px; }
-  .msg.admin { align-self: flex-start; background: #262a38; border-bottom-left-radius: 2px; }
-  .msg img.chat-image { max-width: 100%; max-height: 260px; border-radius: 8px; display: block; cursor: pointer; }
-  .preview-card { max-width: 80%; border: 1px solid #33384a; border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; display: block; background: #1c2029; }
-  .preview-card img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
-  .preview-card .preview-body { padding: 8px 10px; }
-  .preview-card .preview-site { font-size: 0.72rem; color: #9aa0ae; text-transform: uppercase; letter-spacing: 0.03em; }
-  .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
-  .preview-card .preview-desc { font-size: 0.78rem; color: #9aa0ae; margin-top: 2px; }
-  .composer { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
-  .composer input { margin-bottom: 0; flex: 1; }
-  .composer button { width: auto; padding: 10px 18px; }
-  #image-btn { width: auto; padding: 10px 12px; background: #262a38; font-size: 1.1rem; line-height: 1; }
-  #image-btn:hover { background: #33384a; }
+  /* ---------- Chat screen ---------- */
+  #chat-view {
+    display: none; flex-direction: column;
+    width: 100%; max-width: 440px; height: min(680px, calc(100dvh - 48px));
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 24px 60px -24px rgba(0,0,0,0.6);
+  }
+  .chat-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #e0824e);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: var(--accent-ink);
+    flex-shrink: 0;
+  }
+  .chat-header-text { line-height: 1.3; }
+  .chat-header-text .name { font-weight: 600; font-size: 0.98rem; }
+  .status { font-size: 0.78rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); display: inline-block; }
+
+  #messages {
+    flex: 1; overflow-y: auto;
+    padding: 18px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .msg-row { display: flex; flex-direction: column; gap: 4px; max-width: 82%; animation: rise 0.22s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .msg {
+    padding: 10px 14px;
+    font-size: 0.94rem; line-height: 1.45;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 16px 16px 4px 16px;
+  }
+  .msg.admin {
+    align-self: flex-start;
+    background: var(--surface-raised);
+    color: var(--text);
+    border-radius: 16px 16px 16px 4px;
+  }
+  .msg img.chat-image { max-width: 100%; max-height: 280px; border-radius: 10px; display: block; cursor: pointer; }
+  .msg-time {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--text-dim);
+    padding: 0 4px;
+  }
+
+  .preview-card {
+    max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    overflow: hidden; text-decoration: none; color: inherit; display: block;
+    background: var(--surface-raised); transition: border-color 0.15s ease;
+  }
+  .preview-card:hover { border-color: var(--accent-2); }
+  .preview-card img { width: 100%; max-height: 150px; object-fit: cover; display: block; }
+  .preview-card .preview-body { padding: 10px 12px; }
+  .preview-card .preview-site { font-size: 0.7rem; color: var(--accent-2); font-weight: 500; }
+  .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 3px; color: var(--text); }
+  .preview-card .preview-desc { font-size: 0.78rem; color: var(--text-dim); margin-top: 3px; }
+
+  .composer {
+    display: flex; gap: 8px; align-items: center;
+    padding: 12px 14px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .composer-pill {
+    flex: 1; display: flex; align-items: center; gap: 6px;
+    background: #140F20; border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 6px 6px 16px;
+  }
+  .composer-pill input {
+    border: none; background: transparent; padding: 6px 0;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+  .composer-pill input:focus { outline: none; }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: none; cursor: pointer; font-size: 1.05rem; padding: 0;
+    background: transparent; color: var(--text-dim);
+  }
+  .icon-btn:hover { background: var(--surface-raised); color: var(--text); }
+  #send-btn {
+    width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  }
   #image-input { display: none; }
+
+  /* ---------- Mobile: full-screen app feel ---------- */
+  @media (max-width: 560px) {
+    body { padding: 0; align-items: stretch; }
+    #chat-view {
+      max-width: none; width: 100%; height: 100dvh;
+      border-radius: 0; border: none;
+    }
+    .chat-header { padding-top: calc(16px + var(--safe-top)); }
+    .card { max-width: none; border-radius: 0; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; border: none; }
+  }
 </style>
 </head>
 <body>
 
 <div class="card" id="auth-card">
-  <h1 id="auth-title">Log in</h1>
+  <div class="brand">Chat with Willow</div>
+  <p class="tagline" id="auth-tagline">Create an account to start a conversation.</p>
   <div class="error" id="auth-error"></div>
-  <input id="username" type="text" placeholder="Username" autocomplete="username" />
-  <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+  <div class="field">
+    <label for="username">Username</label>
+    <input id="username" type="text" autocomplete="username" />
+  </div>
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+  </div>
   <button id="auth-submit">Log in</button>
   <div class="switch">
-    <span id="switch-text">No account? <a id="switch-link">Register</a></span>
+    <span id="switch-text">No account yet? <a id="switch-link">Register</a></span>
   </div>
 </div>
 
-<div class="card" id="chat-view">
-  <h1>Chat with Willow</h1>
+<div id="chat-view">
+  <div class="chat-header">
+    <div class="avatar">W</div>
+    <div class="chat-header-text">
+      <div class="name">Willow</div>
+      <div class="status"><span class="dot"></span>Online</div>
+    </div>
+  </div>
   <div id="messages"></div>
   <div class="composer">
-    <button id="image-btn" title="Send an image">📷</button>
+    <button id="image-btn" class="icon-btn" title="Send an image">📷</button>
     <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" />
-    <input id="message-input" type="text" placeholder="Type a message..." />
-    <button id="send-btn">Send</button>
+    <div class="composer-pill">
+      <input id="message-input" type="text" placeholder="Message Willow..." />
+    </div>
+    <button id="send-btn" title="Send">➤</button>
   </div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   // ⚠️ Set this to your deployed backend URL (see README).
-  const API_BASE = "https://hellold6-github-io.onrender.com";
+  const API_BASE = "https://YOUR-BACKEND-URL.onrender.com";
 
   let mode = "login"; // or "register"
   let token = localStorage.getItem("chat_token");
@@ -109,7 +254,7 @@
 
   const authCard = document.getElementById("auth-card");
   const chatView = document.getElementById("chat-view");
-  const authTitle = document.getElementById("auth-title");
+  const authTagline = document.getElementById("auth-tagline");
   const authError = document.getElementById("auth-error");
   const authSubmit = document.getElementById("auth-submit");
   const switchText = document.getElementById("switch-text");
@@ -120,10 +265,12 @@
 
   switchLink.onclick = () => {
     mode = mode === "login" ? "register" : "login";
-    authTitle.textContent = mode === "login" ? "Log in" : "Create an account";
+    authTagline.textContent = mode === "login"
+      ? "Log in to continue the conversation."
+      : "Create an account to start a conversation.";
     authSubmit.textContent = mode === "login" ? "Log in" : "Register";
     switchText.innerHTML = mode === "login"
-      ? 'No account? <a id="switch-link">Register</a>'
+      ? 'No account yet? <a id="switch-link">Register</a>'
       : 'Already have an account? <a id="switch-link">Log in</a>';
     document.getElementById("switch-link").onclick = switchLink.onclick;
     authError.textContent = "";
@@ -183,20 +330,25 @@
   }
   function escapeAttr(s) { return escapeHtml(s); }
 
+  function formatTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   function renderMessage(m) {
     const wrap = document.createElement("div");
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.gap = "4px";
+    wrap.className = "msg-row";
     wrap.style.alignSelf = m.sender === "user" ? "flex-end" : "flex-start";
-    wrap.style.maxWidth = "80%";
+    wrap.style.alignItems = m.sender === "user" ? "flex-end" : "flex-start";
 
     const div = document.createElement("div");
     div.className = `msg ${m.sender}`;
-    div.style.maxWidth = "100%";
     if (m.type === "image") {
       const img = document.createElement("img");
       img.className = "chat-image";
+      img.loading = "lazy";
+      img.decoding = "async";
       img.src = m.content;
       img.onclick = () => window.open(m.content, "_blank");
       div.appendChild(img);
@@ -204,6 +356,13 @@
       div.textContent = m.content;
     }
     wrap.appendChild(div);
+
+    if (m.created_at) {
+      const time = document.createElement("div");
+      time.className = "msg-time";
+      time.textContent = formatTime(m.created_at);
+      wrap.appendChild(time);
+    }
 
     if (m.link_preview) {
       wrap.appendChild(renderPreviewCard(m.link_preview));
@@ -246,25 +405,69 @@
   document.getElementById("send-btn").onclick = sendMessage;
   messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
+  // Shrinks an image to a reasonable size before it's ever uploaded, so chat
+  // bubbles aren't stuck decoding full 12MP camera photos just to show a
+  // 260px-tall thumbnail. Animated GIFs are left alone so they keep animating.
+  const MAX_DIMENSION = 1600;
+  const JPEG_QUALITY = 0.82;
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      if (file.type === "image/gif") { resolve({ blob: file, mimeType: file.type }); return; }
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          const scale = MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => (blob ? resolve({ blob, mimeType: "image/jpeg" }) : reject(new Error("Compression failed"))),
+          "image/jpeg",
+          JPEG_QUALITY
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Couldn't read image")); };
+      img.src = objectUrl;
+    });
+  }
+
   document.getElementById("image-btn").onclick = () => imageInput.click();
   imageInput.addEventListener("change", async () => {
     const file = imageInput.files[0];
     imageInput.value = "";
     if (!file || !socket) return;
-    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB."); return; }
+    if (file.size > 20 * 1024 * 1024) { alert("Image must be under 20MB."); return; }
+
+    let blob, mimeType;
+    try {
+      ({ blob, mimeType } = await compressImage(file));
+    } catch {
+      alert("Couldn't process that image.");
+      return;
+    }
+    if (blob.size > 5 * 1024 * 1024) { alert("Image is still too large after compression."); return; }
 
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(",")[1]);
       reader.onerror = reject;
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
     });
 
     try {
       const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ data: base64, mimeType: file.type }),
+        body: JSON.stringify({ data: base64, mimeType }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Upload failed."); return; }

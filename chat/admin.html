@@ -2,63 +2,165 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chat Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; background: #0f1117; color: #e6e6e6; margin: 0; }
-  #login-card {
-    max-width: 380px; margin: 15vh auto; background: #171a23; border: 1px solid #2a2e3a;
-    border-radius: 14px; padding: 28px;
+  :root {
+    --bg: #15111F;
+    --surface: #1A1529;
+    --surface-raised: #2A2340;
+    --accent: #F2A154;
+    --accent-ink: #1A1206;
+    --accent-2: #7FD1C3;
+    --text: #F5F1FA;
+    --text-dim: #A99FC2;
+    --border: #2C2543;
+    --radius-lg: 20px;
+    --radius-sm: 12px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
-  #login-card input { width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #33384a; background: #0f1117; color: #e6e6e6; }
-  #login-card button, .composer button { width: 100%; padding: 10px; border-radius: 8px; border: none; background: #6c5ce7; color: white; font-weight: 600; cursor: pointer; }
-  .error { color: #ff7675; font-size: 0.85rem; min-height: 1em; margin-bottom: 8px; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+  }
+  h1, h2, .brand { font-family: 'Space Grotesk', system-ui, sans-serif; }
 
-  #dashboard { display: none; height: 100vh; }
+  /* ---------- Login ---------- */
+  #login-card {
+    max-width: 380px; margin: 16vh auto; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px;
+    box-shadow: 0 24px 60px -24px rgba(0,0,0,0.6);
+  }
+  #login-card h2 { margin: 0 0 4px; font-size: 1.3rem; }
+  #login-card .tagline { color: var(--text-dim); font-size: 0.88rem; margin: 0 0 20px; }
+  #login-card input {
+    width: 100%; padding: 12px 14px; margin-bottom: 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: #110D1C; color: var(--text); font-size: 1rem; font-family: inherit;
+  }
+  #login-card input:focus { outline: none; border-color: var(--accent); }
+  #login-card button, .composer button {
+    width: 100%; padding: 12px; border-radius: var(--radius-sm); border: none;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  #login-card button:hover { filter: brightness(1.08); }
+  .error { color: #FF8080; font-size: 0.85rem; min-height: 1em; margin-bottom: 8px; }
+
+  /* ---------- Dashboard shell ---------- */
+  #dashboard { display: none; height: 100dvh; }
   .layout { display: flex; height: 100%; }
-  #conversations { width: 280px; border-right: 1px solid #2a2e3a; overflow-y: auto; flex-shrink: 0; }
-  .conv-item { padding: 14px 16px; border-bottom: 1px solid #1e2129; cursor: pointer; }
-  .conv-item:hover, .conv-item.active { background: #1c2029; }
-  .conv-item .name { font-weight: 600; font-size: 0.95rem; }
-  .conv-item .preview { font-size: 0.8rem; color: #9aa0ae; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #chat-panel { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; }
-  #chat-header { font-weight: 600; padding-bottom: 12px; border-bottom: 1px solid #2a2e3a; margin-bottom: 12px; }
-  #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
-  .msg { max-width: 70%; padding: 8px 12px; border-radius: 12px; font-size: 0.92rem; white-space: pre-wrap; word-break: break-word; }
-  .msg.admin { align-self: flex-end; background: #6c5ce7; color: white; }
-  .msg.user { align-self: flex-start; background: #262a38; }
-  .msg img.chat-image { max-width: 100%; max-height: 260px; border-radius: 8px; display: block; cursor: pointer; }
-  .preview-card { max-width: 70%; border: 1px solid #33384a; border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; display: block; background: #1c2029; }
-  .preview-card img { width: 100%; max-height: 160px; object-fit: cover; display: block; }
-  .preview-card .preview-body { padding: 8px 10px; }
-  .preview-card .preview-site { font-size: 0.72rem; color: #9aa0ae; text-transform: uppercase; letter-spacing: 0.03em; }
-  .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
-  .preview-card .preview-desc { font-size: 0.78rem; color: #9aa0ae; margin-top: 2px; }
-  .composer { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
-  .composer input[type="text"] { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #33384a; background: #0f1117; color: #e6e6e6; }
-  .composer button { width: auto; padding: 10px 18px; }
-  #image-btn { width: auto; padding: 10px 12px; background: #262a38; font-size: 1.1rem; line-height: 1; }
-  #image-btn:hover { background: #33384a; }
+
+  #conversations {
+    width: 300px; border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0;
+    background: var(--surface);
+  }
+  .conversations-header {
+    padding: 18px 18px 12px; padding-top: calc(18px + var(--safe-top));
+    font-weight: 700; font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem;
+  }
+  .conv-item {
+    padding: 13px 18px; cursor: pointer; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border); transition: background 0.1s ease;
+  }
+  .conv-item:hover { background: var(--surface-raised); }
+  .conv-item.active { background: var(--surface-raised); }
+  .conv-avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent-2), #4fa89a);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; color: #0e1f1c; font-size: 0.9rem;
+  }
+  .conv-text { min-width: 0; }
+  .conv-item .name { font-weight: 600; font-size: 0.94rem; }
+  .conv-item .preview {
+    font-size: 0.8rem; color: var(--text-dim); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  #chat-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chat-header {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 600; padding: 16px 20px; padding-top: calc(16px + var(--safe-top));
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #back-btn { display: none; background: none; border: none; color: var(--text); font-size: 1.2rem; cursor: pointer; padding: 4px; width: auto; }
+
+  #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; }
+  .empty { color: var(--text-dim); margin: auto; font-size: 0.9rem; }
+
+  .msg-row { display: flex; flex-direction: column; gap: 4px; max-width: 70%; animation: rise 0.2s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .msg { padding: 10px 14px; font-size: 0.92rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+  .msg.admin { background: var(--accent); color: var(--accent-ink); border-radius: 16px 16px 4px 16px; }
+  .msg.user { background: var(--surface-raised); color: var(--text); border-radius: 16px 16px 16px 4px; }
+  .msg img.chat-image { max-width: 100%; max-height: 280px; border-radius: 10px; display: block; cursor: pointer; }
+  .msg-time { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--text-dim); padding: 0 4px; }
+
+  .preview-card {
+    max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    overflow: hidden; text-decoration: none; color: inherit; display: block; background: var(--surface-raised);
+  }
+  .preview-card img { width: 100%; max-height: 150px; object-fit: cover; display: block; }
+  .preview-card .preview-body { padding: 10px 12px; }
+  .preview-card .preview-site { font-size: 0.7rem; color: var(--accent-2); font-weight: 500; }
+  .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 3px; }
+  .preview-card .preview-desc { font-size: 0.78rem; color: var(--text-dim); margin-top: 3px; }
+
+  .composer {
+    display: flex; gap: 8px; align-items: center; padding: 12px 16px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  .composer input[type="text"] {
+    flex: 1; padding: 11px 16px; border-radius: 999px; border: 1px solid var(--border);
+    background: #110D1C; color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  .composer input[type="text"]:focus { outline: none; border-color: var(--accent); }
+  .composer button { width: auto; padding: 11px 20px; border-radius: 999px; }
+  #image-btn {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; padding: 0;
+    background: var(--surface-raised); font-size: 1.1rem; line-height: 1;
+  }
+  #image-btn:hover { filter: brightness(1.15); }
   #image-input { display: none; }
-  .empty { color: #9aa0ae; margin: auto; }
+
+  /* ---------- Mobile: list <-> detail, one pane at a time ---------- */
+  @media (max-width: 720px) {
+    #conversations { width: 100%; border-right: none; }
+    .layout.show-chat #conversations { display: none; }
+    .layout:not(.show-chat) #chat-panel { display: none; }
+    #back-btn { display: inline-flex; }
+  }
 </style>
 </head>
 <body>
 
 <div id="login-card">
   <h2>Admin Login</h2>
+  <p class="tagline">Enter your admin password to continue.</p>
   <div class="error" id="login-error"></div>
-  <input id="password" type="password" placeholder="Admin password" autocomplete="current-password" />
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
   <button id="login-btn">Log in</button>
 </div>
 
 <div id="dashboard">
-  <div class="layout">
-    <div id="conversations"></div>
+  <div class="layout" id="layout">
+    <div id="conversations">
+      <div class="conversations-header">Conversations</div>
+      <div id="conv-list"></div>
+    </div>
     <div id="chat-panel">
-      <div id="chat-header">Select a conversation</div>
+      <div id="chat-header">
+        <button id="back-btn">←</button>
+        <span id="chat-header-name">Select a conversation</span>
+      </div>
       <div id="messages"><div class="empty">Pick someone from the list to see messages.</div></div>
       <div class="composer" id="composer" style="display:none;">
         <button id="image-btn" title="Send an image">📷</button>
@@ -73,7 +175,7 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   // ⚠️ Set this to your deployed backend URL (same as chat.html).
-  const API_BASE = "https://hellold6-github-io.onrender.com";
+  const API_BASE = "https://YOUR-BACKEND-URL.onrender.com";
 
   let token = localStorage.getItem("admin_token");
   let socket = null;
@@ -85,6 +187,7 @@
   const dashboard = document.getElementById("dashboard");
   const loginError = document.getElementById("login-error");
   const imageInput = document.getElementById("image-input");
+  const layoutEl = document.getElementById("layout");
 
   document.getElementById("login-btn").onclick = async () => {
     const password = document.getElementById("password").value;
@@ -114,14 +217,23 @@
     renderConversationList();
   }
 
+  function initials(name) {
+    return (name || "?").slice(0, 2).toUpperCase();
+  }
+
   function renderConversationList() {
-    const el = document.getElementById("conversations");
+    const el = document.getElementById("conv-list");
     el.innerHTML = "";
     conversations.forEach((c) => {
       const div = document.createElement("div");
       div.className = "conv-item" + (c.id === activeUserId ? " active" : "");
       const previewText = c.last_type === "image" ? "📷 Image" : (c.last_message || "No messages yet");
-      div.innerHTML = `<div class="name">${escapeHtml(c.username)}</div><div class="preview">${escapeHtml(previewText)}</div>`;
+      div.innerHTML = `
+        <div class="conv-avatar">${escapeHtml(initials(c.username))}</div>
+        <div class="conv-text">
+          <div class="name">${escapeHtml(c.username)}</div>
+          <div class="preview">${escapeHtml(previewText)}</div>
+        </div>`;
       div.onclick = () => openConversation(c.id, c.username);
       el.appendChild(div);
     });
@@ -130,8 +242,9 @@
   async function openConversation(userId, username) {
     activeUserId = userId;
     renderConversationList();
-    document.getElementById("chat-header").textContent = username;
+    document.getElementById("chat-header-name").textContent = username;
     document.getElementById("composer").style.display = "flex";
+    layoutEl.classList.add("show-chat"); // on mobile, switches from list to detail pane
     const res = await fetch(`${API_BASE}/api/admin/messages/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -142,6 +255,10 @@
     msgs.forEach(renderMessage);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
+
+  document.getElementById("back-btn").onclick = () => {
+    layoutEl.classList.remove("show-chat");
+  };
 
   function renderPreviewCard(preview) {
     const a = document.createElement("a");
@@ -159,21 +276,25 @@
     return a;
   }
 
+  function formatTime(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   function renderMessage(m) {
     const messagesEl = document.getElementById("messages");
     const wrap = document.createElement("div");
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.gap = "4px";
+    wrap.className = "msg-row";
     wrap.style.alignSelf = m.sender === "admin" ? "flex-end" : "flex-start";
-    wrap.style.maxWidth = "70%";
+    wrap.style.alignItems = m.sender === "admin" ? "flex-end" : "flex-start";
 
     const div = document.createElement("div");
     div.className = `msg ${m.sender}`;
-    div.style.maxWidth = "100%";
     if (m.type === "image") {
       const img = document.createElement("img");
       img.className = "chat-image";
+      img.loading = "lazy";
+      img.decoding = "async";
       img.src = m.content;
       img.onclick = () => window.open(m.content, "_blank");
       div.appendChild(img);
@@ -181,6 +302,13 @@
       div.textContent = m.content;
     }
     wrap.appendChild(div);
+
+    if (m.created_at) {
+      const time = document.createElement("div");
+      time.className = "msg-time";
+      time.textContent = formatTime(m.created_at);
+      wrap.appendChild(time);
+    }
 
     if (m.link_preview) wrap.appendChild(renderPreviewCard(m.link_preview));
 
@@ -203,7 +331,7 @@
       if (userId === activeUserId) openConversation(userId, currentName());
     });
     socket.on("message-sent", (m) => {
-      if (m.userId === activeUserId) renderMessage({ id: m.id, sender: "admin", type: m.type, content: m.content });
+      if (m.userId === activeUserId) renderMessage({ id: m.id, sender: "admin", type: m.type, content: m.content, created_at: m.created_at });
     });
     socket.on("message-preview", ({ id, link_preview }) => {
       const wrap = messageEls.get(id);
@@ -234,25 +362,69 @@
   document.getElementById("send-btn").onclick = sendMessage;
   document.getElementById("message-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
+  // Shrinks an image to a reasonable size before it's ever uploaded, so chat
+  // bubbles aren't stuck decoding full 12MP camera photos just to show a
+  // 260px-tall thumbnail. Animated GIFs are left alone so they keep animating.
+  const MAX_DIMENSION = 1600;
+  const JPEG_QUALITY = 0.82;
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      if (file.type === "image/gif") { resolve({ blob: file, mimeType: file.type }); return; }
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          const scale = MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => (blob ? resolve({ blob, mimeType: "image/jpeg" }) : reject(new Error("Compression failed"))),
+          "image/jpeg",
+          JPEG_QUALITY
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Couldn't read image")); };
+      img.src = objectUrl;
+    });
+  }
+
   document.getElementById("image-btn").onclick = () => imageInput.click();
   imageInput.addEventListener("change", async () => {
     const file = imageInput.files[0];
     imageInput.value = "";
     if (!file || !socket || !activeUserId) return;
-    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB."); return; }
+    if (file.size > 20 * 1024 * 1024) { alert("Image must be under 20MB."); return; }
+
+    let blob, mimeType;
+    try {
+      ({ blob, mimeType } = await compressImage(file));
+    } catch {
+      alert("Couldn't process that image.");
+      return;
+    }
+    if (blob.size > 5 * 1024 * 1024) { alert("Image is still too large after compression."); return; }
 
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(",")[1]);
       reader.onerror = reject;
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(blob);
     });
 
     try {
       const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ data: base64, mimeType: file.type }),
+        body: JSON.stringify({ data: base64, mimeType }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Upload failed."); return; }
