@@ -49,20 +49,28 @@ async function migrate() {
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       sender TEXT NOT NULL CHECK (sender IN ('user','admin')),
-      type TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text','image')),
+      type TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text','image','video')),
       content TEXT NOT NULL,
       link_preview JSONB,
+      reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'text';
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS link_preview JSONB;
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL;
+
+    -- Widen the type check to allow 'video' for servers that were already
+    -- running before video support was added (Postgres auto-names an inline
+    -- column CHECK as <table>_<column>_check, which is what we target here).
+    ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_type_check;
+    ALTER TABLE messages ADD CONSTRAINT messages_type_check CHECK (type IN ('text','image','video'));
   `);
 }
 
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGIN || '*' }));
-app.use(express.json({ limit: '8mb' })); // images are base64-encoded, so allow some headroom
+app.use(express.json({ limit: '35mb' })); // base64-encoded video is the biggest payload we accept
 
 // ---------- Auth helpers ----------
 
@@ -124,7 +132,7 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/messages', authMiddleware, async (req, res) => {
   if (req.auth.role !== 'user') return res.status(403).json({ error: 'User only' });
   const result = await pool.query(
-    'SELECT id, sender, type, content, link_preview, created_at FROM messages WHERE user_id = $1 ORDER BY created_at ASC',
+    'SELECT id, sender, type, content, link_preview, reply_to, created_at FROM messages WHERE user_id = $1 ORDER BY created_at ASC',
     [req.auth.id]
   );
   res.json(result.rows);
@@ -152,27 +160,39 @@ app.get('/api/admin/conversations', authMiddleware, requireAdmin, async (req, re
 
 app.get('/api/admin/messages/:userId', authMiddleware, requireAdmin, async (req, res) => {
   const result = await pool.query(
-    'SELECT id, sender, type, content, link_preview, created_at FROM messages WHERE user_id = $1 ORDER BY created_at ASC',
+    'SELECT id, sender, type, content, link_preview, reply_to, created_at FROM messages WHERE user_id = $1 ORDER BY created_at ASC',
     [req.params.userId]
   );
   res.json(result.rows);
 });
 
-// ---------- REST: image upload (both visitors and admin use this) ----------
+// ---------- REST: media upload (images + videos; both visitors and admin use this) ----------
 
 const ALLOWED_IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+const ALLOWED_VIDEO_TYPES = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_VIDEO_BYTES = 25 * 1024 * 1024; // 25MB — client compresses before this, so this is a ceiling, not a target
 
 app.post('/api/upload', authMiddleware, async (req, res) => {
-  if (!imagesEnabled) return res.status(503).json({ error: 'Image uploads are not configured on this server' });
+  if (!imagesEnabled) return res.status(503).json({ error: 'Uploads are not configured on this server' });
   const { data, mimeType } = req.body || {};
-  const ext = ALLOWED_IMAGE_TYPES[mimeType];
-  if (!data || !ext) return res.status(400).json({ error: 'Send a PNG, JPEG, GIF, or WEBP image' });
+  if (!data || !mimeType) return res.status(400).json({ error: 'Missing file data' });
+
+  let ext, maxBytes, folder;
+  if (ALLOWED_IMAGE_TYPES[mimeType]) {
+    ext = ALLOWED_IMAGE_TYPES[mimeType]; maxBytes = MAX_IMAGE_BYTES; folder = 'images';
+  } else if (ALLOWED_VIDEO_TYPES[mimeType]) {
+    ext = ALLOWED_VIDEO_TYPES[mimeType]; maxBytes = MAX_VIDEO_BYTES; folder = 'videos';
+  } else {
+    return res.status(400).json({ error: 'Unsupported file type' });
+  }
 
   const buffer = Buffer.from(data, 'base64');
-  if (buffer.length > MAX_IMAGE_BYTES) return res.status(413).json({ error: 'Image must be under 5MB' });
+  if (buffer.length > maxBytes) {
+    return res.status(413).json({ error: `File must be under ${Math.round(maxBytes / 1024 / 1024)}MB` });
+  }
 
-  const path = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  const path = `${folder}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   try {
     const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${path}`, {
       method: 'POST',
@@ -285,11 +305,11 @@ async function attachLinkPreview(messageId, content, rooms) {
 
 let lastActiveConversation = null; // { userId, username } — whoever messaged most recently
 
-async function deliverUserMessage(userId, username, content, type = 'text') {
+async function deliverUserMessage(userId, username, content, type = 'text', replyTo = null) {
   const trimmed = content.trim().slice(0, 4000);
   const result = await pool.query(
-    'INSERT INTO messages (user_id, sender, type, content) VALUES ($1, $2, $3, $4) RETURNING id, content, type, created_at',
-    [userId, 'user', type, trimmed]
+    'INSERT INTO messages (user_id, sender, type, content, reply_to) VALUES ($1, $2, $3, $4, $5) RETURNING id, content, type, reply_to, created_at',
+    [userId, 'user', type, trimmed, replyTo]
   );
   const payload = { sender: 'user', ...result.rows[0] };
   lastActiveConversation = { userId, username };
@@ -302,11 +322,11 @@ async function deliverUserMessage(userId, username, content, type = 'text') {
   return payload;
 }
 
-async function deliverAdminReply(userId, content, type = 'text') {
+async function deliverAdminReply(userId, content, type = 'text', replyTo = null) {
   const trimmed = content.trim().slice(0, 4000);
   const result = await pool.query(
-    'INSERT INTO messages (user_id, sender, type, content) VALUES ($1, $2, $3, $4) RETURNING id, content, type, created_at',
-    [userId, 'admin', type, trimmed]
+    'INSERT INTO messages (user_id, sender, type, content, reply_to) VALUES ($1, $2, $3, $4, $5) RETURNING id, content, type, reply_to, created_at',
+    [userId, 'admin', type, trimmed, replyTo]
   );
   const payload = { sender: 'admin', ...result.rows[0] };
   io.to(`user-${userId}`).emit('message', payload);
@@ -319,23 +339,27 @@ async function deliverAdminReply(userId, content, type = 'text') {
 io.on('connection', (socket) => {
   const { role } = socket.auth;
 
+  const normalizeType = (type) => (type === 'image' || type === 'video' ? type : 'text');
+
   if (role === 'user') {
     socket.join(`user-${socket.auth.id}`);
 
-    socket.on('message', async ({ content, type }) => {
+    socket.on('message', async ({ content, type, replyTo }) => {
       if (!content || typeof content !== 'string' || !content.trim()) return;
-      if (type === 'image' && !imagesEnabled) return;
-      await deliverUserMessage(socket.auth.id, socket.auth.username, content, type === 'image' ? 'image' : 'text');
+      const msgType = normalizeType(type);
+      if (msgType !== 'text' && !imagesEnabled) return;
+      await deliverUserMessage(socket.auth.id, socket.auth.username, content, msgType, replyTo || null);
     });
   }
 
   if (role === 'admin') {
     socket.join('admin-room');
 
-    socket.on('message', async ({ userId, content, type }) => {
+    socket.on('message', async ({ userId, content, type, replyTo }) => {
       if (!userId || !content || !content.trim()) return;
-      if (type === 'image' && !imagesEnabled) return;
-      const payload = await deliverAdminReply(userId, content, type === 'image' ? 'image' : 'text');
+      const msgType = normalizeType(type);
+      if (msgType !== 'text' && !imagesEnabled) return;
+      const payload = await deliverAdminReply(userId, content, msgType, replyTo || null);
       socket.emit('message-sent', { userId, ...payload });
     });
   }
@@ -408,6 +432,8 @@ if (DISCORD_BOT_TOKEN && DISCORD_OWNER_ID) {
       for (const attachment of message.attachments.values()) {
         if (attachment.contentType?.startsWith('image/')) {
           await deliverAdminReply(targetUserId, attachment.url, 'image');
+        } else if (attachment.contentType?.startsWith('video/')) {
+          await deliverAdminReply(targetUserId, attachment.url, 'video');
         }
       }
       await message.react(targetUsername ? '👉' : '✅');
@@ -427,19 +453,29 @@ if (DISCORD_BOT_TOKEN && DISCORD_OWNER_ID) {
 async function notifyDiscordNewMessage(userId, username, payload) {
   if (!discordReady) return;
   const owner = await discordClient.users.fetch(DISCORD_OWNER_ID);
-  const embed = new EmbedBuilder()
-    .setAuthor({ name: username })
-    .setFooter({ text: `Reply to this message, or use: reply ${username} <message>` })
-    .setColor(0x6c5ce7)
-    .setTimestamp();
 
-  if (payload.type === 'image') {
-    embed.setImage(payload.content);
+  let sent;
+  if (payload.type === 'video') {
+    // Discord embeds can't play video, but a plain message with a direct link
+    // gets Discord's own native video player via link unfurling.
+    sent = await owner.send({
+      content: `**${username}** sent a video:\n${payload.content}\n-# Reply to this message, or use: reply ${username} <message>`,
+    });
   } else {
-    embed.setDescription(payload.content);
+    const embed = new EmbedBuilder()
+      .setAuthor({ name: username })
+      .setFooter({ text: `Reply to this message, or use: reply ${username} <message>` })
+      .setColor(0x6c5ce7)
+      .setTimestamp();
+
+    if (payload.type === 'image') {
+      embed.setImage(payload.content);
+    } else {
+      embed.setDescription(payload.content);
+    }
+    sent = await owner.send({ embeds: [embed] });
   }
 
-  const sent = await owner.send({ embeds: [embed] });
   dmMessageToUserId.set(sent.id, userId);
   if (payload.type === 'text' && extractFirstUrl(payload.content)) {
     pendingDiscordPreviewEdits.set(payload.id, sent);

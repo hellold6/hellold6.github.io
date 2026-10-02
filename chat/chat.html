@@ -123,30 +123,47 @@
     display: flex; flex-direction: column; gap: 10px;
     scroll-behavior: smooth;
   }
-  .msg-row { display: flex; flex-direction: column; gap: 4px; max-width: 82%; animation: rise 0.22s ease-out; }
+  .msg-row { display: flex; flex-direction: column; gap: 4px; max-width: 82%; animation: rise 0.22s ease-out; position: relative; }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .msg-group { display: flex; align-items: flex-end; gap: 4px; }
+  .msg-group.user { flex-direction: row-reverse; }
   .msg {
     padding: 10px 14px;
     font-size: 0.94rem; line-height: 1.45;
     white-space: pre-wrap; word-break: break-word;
   }
   .msg.user {
-    align-self: flex-end;
     background: var(--accent);
     color: var(--accent-ink);
     border-radius: 16px 16px 4px 16px;
   }
   .msg.admin {
-    align-self: flex-start;
     background: var(--surface-raised);
     color: var(--text);
     border-radius: 16px 16px 16px 4px;
   }
   .msg img.chat-image { max-width: 100%; max-height: 280px; border-radius: 10px; display: block; cursor: pointer; }
+  .msg video.chat-video { max-width: 100%; max-height: 320px; border-radius: 10px; display: block; background: #000; }
   .msg-time {
     font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--text-dim);
     padding: 0 4px;
   }
+  .reply-btn {
+    opacity: 0; transition: opacity 0.12s ease;
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-raised); color: var(--text-dim);
+    border: none; cursor: pointer; font-size: 0.85rem; padding: 0;
+  }
+  .msg-row:hover .reply-btn { opacity: 1; }
+  .quote-block {
+    border-left: 2px solid var(--accent-2);
+    padding: 4px 0 4px 8px;
+    font-size: 0.78rem; color: var(--text-dim);
+    margin-bottom: 4px; max-width: 100%;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .quote-block b { color: var(--text); font-weight: 600; }
 
   .preview-card {
     max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -159,6 +176,17 @@
   .preview-card .preview-site { font-size: 0.7rem; color: var(--accent-2); font-weight: 500; }
   .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 3px; color: var(--text); }
   .preview-card .preview-desc { font-size: 0.78rem; color: var(--text-dim); margin-top: 3px; }
+
+  #reply-preview {
+    display: none; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 16px; border-top: 1px solid var(--border);
+    background: var(--surface-raised); font-size: 0.82rem;
+  }
+  #reply-preview .reply-snippet { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #reply-preview .reply-snippet b { color: var(--text); }
+  #reply-preview button {
+    width: auto; background: none; color: var(--text-dim); font-size: 1rem; padding: 2px 6px; flex-shrink: 0;
+  }
 
   .composer {
     display: flex; gap: 8px; align-items: center;
@@ -189,7 +217,11 @@
     background: var(--accent); color: var(--accent-ink);
     display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
   }
-  #image-input { display: none; }
+  #send-btn:disabled { opacity: 0.5; cursor: default; }
+  #attach-input { display: none; }
+  #upload-status {
+    display: none; font-size: 0.78rem; color: var(--text-dim); padding: 4px 16px;
+  }
 
   /* ---------- Mobile: full-screen app feel ---------- */
   @media (max-width: 560px) {
@@ -200,6 +232,7 @@
     }
     .chat-header { padding-top: calc(16px + var(--safe-top)); }
     .card { max-width: none; border-radius: 0; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; border: none; }
+    .reply-btn { opacity: 1; } /* no hover on touch devices, so always show */
   }
 </style>
 </head>
@@ -232,9 +265,14 @@
     </div>
   </div>
   <div id="messages"></div>
+  <div id="upload-status"></div>
+  <div id="reply-preview">
+    <div class="reply-snippet">Replying to <b id="reply-snippet-text"></b></div>
+    <button id="cancel-reply">✕</button>
+  </div>
   <div class="composer">
-    <button id="image-btn" class="icon-btn" title="Send an image">📷</button>
-    <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" />
+    <button id="attach-btn" class="icon-btn" title="Send an image or video">📎</button>
+    <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime" />
     <div class="composer-pill">
       <input id="message-input" type="text" placeholder="Message Willow..." />
     </div>
@@ -245,12 +283,14 @@
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   // ⚠️ Set this to your deployed backend URL (see README).
-  const API_BASE = "https://hellold6-github-io.onrender.com";
+  const API_BASE = "https://hellold6-github-io.onrender.comm";
 
   let mode = "login"; // or "register"
   let token = localStorage.getItem("chat_token");
   let socket = null;
   const messageEls = new Map(); // message id -> DOM element, so link previews can attach later
+  const messageData = new Map(); // message id -> {sender, type, content}, for rendering quoted replies
+  let replyingTo = null; // { id, sender, type, content } | null
 
   const authCard = document.getElementById("auth-card");
   const chatView = document.getElementById("chat-view");
@@ -261,7 +301,11 @@
   const switchLink = document.getElementById("switch-link");
   const messagesEl = document.getElementById("messages");
   const messageInput = document.getElementById("message-input");
-  const imageInput = document.getElementById("image-input");
+  const attachInput = document.getElementById("attach-input");
+  const sendBtn = document.getElementById("send-btn");
+  const replyPreview = document.getElementById("reply-preview");
+  const replySnippetText = document.getElementById("reply-snippet-text");
+  const uploadStatus = document.getElementById("upload-status");
 
   switchLink.onclick = () => {
     mode = mode === "login" ? "register" : "login";
@@ -305,6 +349,7 @@
     const msgs = await res.json();
     messagesEl.innerHTML = "";
     messageEls.clear();
+    messageData.clear();
     msgs.forEach(renderMessage);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
@@ -336,11 +381,32 @@
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  function summarize(m) {
+    if (!m) return "a message";
+    if (m.type === "image") return "📷 Image";
+    if (m.type === "video") return "🎥 Video";
+    return m.content.length > 60 ? m.content.slice(0, 60) + "…" : m.content;
+  }
+
   function renderMessage(m) {
+    if (m.id) messageData.set(m.id, { sender: m.sender, type: m.type, content: m.content });
+
     const wrap = document.createElement("div");
     wrap.className = "msg-row";
     wrap.style.alignSelf = m.sender === "user" ? "flex-end" : "flex-start";
     wrap.style.alignItems = m.sender === "user" ? "flex-end" : "flex-start";
+
+    if (m.reply_to && messageData.has(m.reply_to)) {
+      const quoted = messageData.get(m.reply_to);
+      const who = quoted.sender === "user" ? "You" : "Willow";
+      const quote = document.createElement("div");
+      quote.className = "quote-block";
+      quote.innerHTML = `<b>${escapeHtml(who)}</b> — ${escapeHtml(summarize(quoted))}`;
+      wrap.appendChild(quote);
+    }
+
+    const group = document.createElement("div");
+    group.className = `msg-group ${m.sender === "user" ? "user" : "admin"}`;
 
     const div = document.createElement("div");
     div.className = `msg ${m.sender}`;
@@ -352,10 +418,29 @@
       img.src = m.content;
       img.onclick = () => window.open(m.content, "_blank");
       div.appendChild(img);
+    } else if (m.type === "video") {
+      const video = document.createElement("video");
+      video.className = "chat-video";
+      video.src = m.content;
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      div.appendChild(video);
     } else {
       div.textContent = m.content;
     }
-    wrap.appendChild(div);
+    group.appendChild(div);
+
+    if (m.id) {
+      const replyBtn = document.createElement("button");
+      replyBtn.className = "reply-btn";
+      replyBtn.title = "Reply";
+      replyBtn.textContent = "↩";
+      replyBtn.onclick = () => setReplyTarget(m.id);
+      group.appendChild(replyBtn);
+    }
+
+    wrap.appendChild(group);
 
     if (m.created_at) {
       const time = document.createElement("div");
@@ -371,6 +456,20 @@
     messagesEl.appendChild(wrap);
     if (m.id) messageEls.set(m.id, wrap);
   }
+
+  function setReplyTarget(id) {
+    const data = messageData.get(id);
+    if (!data) return;
+    replyingTo = { id, ...data };
+    const who = data.sender === "user" ? "yourself" : "Willow";
+    replySnippetText.textContent = `${who}: ${summarize(data)}`;
+    replyPreview.style.display = "flex";
+    messageInput.focus();
+  }
+  document.getElementById("cancel-reply").onclick = () => {
+    replyingTo = null;
+    replyPreview.style.display = "none";
+  };
 
   function startChat() {
     authCard.style.display = "none";
@@ -399,16 +498,19 @@
   function sendMessage() {
     const text = messageInput.value;
     if (!text.trim() || !socket) return;
-    socket.emit("message", { content: text, type: "text" });
+    socket.emit("message", { content: text, type: "text", replyTo: replyingTo?.id || null });
     messageInput.value = "";
+    replyingTo = null;
+    replyPreview.style.display = "none";
   }
   document.getElementById("send-btn").onclick = sendMessage;
   messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
+  // ---------- Image compression ----------
   // Shrinks an image to a reasonable size before it's ever uploaded, so chat
   // bubbles aren't stuck decoding full 12MP camera photos just to show a
   // 260px-tall thumbnail. Animated GIFs are left alone so they keep animating.
-  const MAX_DIMENSION = 1600;
+  const MAX_IMAGE_DIMENSION = 1600;
   const JPEG_QUALITY = 0.82;
 
   function compressImage(file) {
@@ -420,8 +522,8 @@
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
         let { width, height } = img;
-        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-          const scale = MAX_DIMENSION / Math.max(width, height);
+        if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+          const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
           width = Math.round(width * scale);
           height = Math.round(height * scale);
         }
@@ -440,22 +542,129 @@
     });
   }
 
-  document.getElementById("image-btn").onclick = () => imageInput.click();
-  imageInput.addEventListener("change", async () => {
-    const file = imageInput.files[0];
-    imageInput.value = "";
+  // ---------- Video compression ----------
+  // Re-encodes through the browser's own MediaRecorder + canvas, so no large
+  // library (ffmpeg.wasm etc.) needs to be downloaded. This plays the clip in
+  // real time while re-recording it, so processing takes roughly as long as
+  // the clip itself — fine for short chat clips, which is why length is capped.
+  const MAX_VIDEO_DURATION = 90; // seconds
+  const VIDEO_MAX_DIMENSION = 854; // ~480p on the long side
+  const VIDEO_BITRATE = 1_200_000; // ~1.2 Mbps
+
+  function canCompressVideo() {
+    return typeof MediaRecorder !== "undefined"
+      && typeof HTMLVideoElement.prototype.captureStream === "function";
+  }
+
+  function compressVideo(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      if (!canCompressVideo()) { resolve({ blob: file, mimeType: file.type }); return; }
+
+      const video = document.createElement("video");
+      video.muted = false;
+      video.playsInline = true;
+      video.src = URL.createObjectURL(file);
+
+      video.onloadedmetadata = () => {
+        if (video.duration > MAX_VIDEO_DURATION) {
+          URL.revokeObjectURL(video.src);
+          reject(new Error(`Videos must be under ${MAX_VIDEO_DURATION} seconds.`));
+          return;
+        }
+
+        let { videoWidth: width, videoHeight: height } = video;
+        if (width > VIDEO_MAX_DIMENSION || height > VIDEO_MAX_DIMENSION) {
+          const scale = VIDEO_MAX_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale / 2) * 2; // keep even dimensions for the encoder
+          height = Math.round(height * scale / 2) * 2;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        const canvasStream = canvas.captureStream(30);
+        try {
+          const audioTracks = video.captureStream().getAudioTracks();
+          audioTracks.forEach((t) => canvasStream.addTrack(t));
+        } catch {
+          // No audio track, or captureStream not fully supported — silent video is fine.
+        }
+
+        const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+          .find((t) => MediaRecorder.isTypeSupported(t)) || "video/webm";
+        const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: VIDEO_BITRATE });
+        const chunks = [];
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = () => {
+          URL.revokeObjectURL(video.src);
+          resolve({ blob: new Blob(chunks, { type: mimeType }), mimeType: "video/webm" });
+        };
+        recorder.onerror = (e) => { URL.revokeObjectURL(video.src); reject(e.error || new Error("Recording failed")); };
+
+        let rafId;
+        const drawFrame = () => {
+          ctx.drawImage(video, 0, 0, width, height);
+          if (onProgress) onProgress(video.currentTime / video.duration);
+          if (!video.ended) rafId = requestAnimationFrame(drawFrame);
+        };
+
+        video.onended = () => {
+          cancelAnimationFrame(rafId);
+          recorder.stop();
+        };
+
+        recorder.start();
+        video.play().then(drawFrame).catch((err) => { recorder.stop(); reject(err); });
+      };
+
+      video.onerror = () => { URL.revokeObjectURL(video.src); reject(new Error("Couldn't read video")); };
+    });
+  }
+
+  document.getElementById("attach-btn").onclick = () => attachInput.click();
+  attachInput.addEventListener("change", async () => {
+    const file = attachInput.files[0];
+    attachInput.value = "";
     if (!file || !socket) return;
-    if (file.size > 20 * 1024 * 1024) { alert("Image must be under 20MB."); return; }
+
+    const isVideo = file.type.startsWith("video/");
+    const rawLimit = isVideo ? 150 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (file.size > rawLimit) {
+      alert(`File must be under ${Math.round(rawLimit / 1024 / 1024)}MB.`);
+      return;
+    }
+
+    sendBtn.disabled = true;
+    uploadStatus.style.display = "block";
+    uploadStatus.textContent = isVideo ? "Compressing video…" : "Processing image…";
 
     let blob, mimeType;
     try {
-      ({ blob, mimeType } = await compressImage(file));
-    } catch {
-      alert("Couldn't process that image.");
+      if (isVideo) {
+        ({ blob, mimeType } = await compressVideo(file, (p) => {
+          uploadStatus.textContent = `Compressing video… ${Math.round(p * 100)}%`;
+        }));
+      } else {
+        ({ blob, mimeType } = await compressImage(file));
+      }
+    } catch (err) {
+      alert(err.message || "Couldn't process that file.");
+      uploadStatus.style.display = "none";
+      sendBtn.disabled = false;
       return;
     }
-    if (blob.size > 5 * 1024 * 1024) { alert("Image is still too large after compression."); return; }
 
+    const finalLimit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (blob.size > finalLimit) {
+      alert(`File is still too large after compression (${Math.round(blob.size / 1024 / 1024)}MB). Try a shorter clip.`);
+      uploadStatus.style.display = "none";
+      sendBtn.disabled = false;
+      return;
+    }
+
+    uploadStatus.textContent = "Uploading…";
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(",")[1]);
@@ -471,9 +680,14 @@
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Upload failed."); return; }
-      socket.emit("message", { content: data.url, type: "image" });
+      socket.emit("message", { content: data.url, type: isVideo ? "video" : "image", replyTo: replyingTo?.id || null });
+      replyingTo = null;
+      replyPreview.style.display = "none";
     } catch {
-      alert("Couldn't upload that image.");
+      alert("Couldn't upload that file.");
+    } finally {
+      uploadStatus.style.display = "none";
+      sendBtn.disabled = false;
     }
   });
 
