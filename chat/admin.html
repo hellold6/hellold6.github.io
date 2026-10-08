@@ -703,14 +703,13 @@
 
     sendBtn.disabled = true;
     uploadStatus.style.display = "block";
-    uploadStatus.textContent = isVideo ? "Compressing video…" : "Processing image…";
+    uploadStatus.textContent = isVideo ? "Uploading video…" : "Processing image…";
 
     let blob, mimeType;
     try {
       if (isVideo) {
-        ({ blob, mimeType } = await compressVideo(file, (p) => {
-          uploadStatus.textContent = `Compressing video… ${Math.round(p * 100)}%`;
-        }));
+        blob = file;
+        mimeType = normalizeVideoMimeType(file);
       } else {
         ({ blob, mimeType } = await compressImage(file));
       }
@@ -723,7 +722,7 @@
 
     const finalLimit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
     if (blob.size > finalLimit) {
-      alert(`File is still too large after compression (${Math.round(blob.size / 1024 / 1024)}MB). Try a shorter clip.`);
+      alert(`File is too large for upload (${Math.round(blob.size / 1024 / 1024)}MB). Try a smaller clip.`);
       uploadStatus.style.display = "none";
       sendBtn.disabled = false;
       return;
