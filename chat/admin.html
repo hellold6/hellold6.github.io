@@ -132,6 +132,16 @@
   .preview-card .preview-title { font-size: 0.85rem; font-weight: 600; margin-top: 3px; }
   .preview-card .preview-desc { font-size: 0.78rem; color: var(--text-dim); margin-top: 3px; }
 
+  .msg-row.has-embed { max-width: 100%; }
+  .ig-embed {
+    width: 326px; max-width: 100%; padding: 28px 16px; text-align: center; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised);
+  }
+  .ig-embed:hover { border-color: var(--accent-2); }
+  .ig-embed .ig-label { display: block; font-weight: 600; font-size: 0.9rem; }
+  .ig-embed .ig-hint { display: block; margin-top: 4px; color: var(--text-dim); font-size: 0.78rem; }
+  .ig-frame { width: 400px; max-width: 100%; height: 580px; border: 0; border-radius: var(--radius-sm); background: #fff; }
+
   #reply-preview {
     display: none; align-items: center; justify-content: space-between; gap: 10px;
     padding: 8px 20px; border-top: 1px solid var(--border);
@@ -327,6 +337,36 @@
     return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  // ---------- Instagram embeds ----------
+  // A pasted reel/post link gets a tap-to-load embed under the message. It
+  // only loads Instagram's page once tapped, so scrolling stays fast.
+  const INSTAGRAM_RE = /https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i;
+
+  function renderInstagramEmbed(text) {
+    const m = text.match(INSTAGRAM_RE);
+    if (!m) return null;
+    const kind = m[1].toLowerCase() === "reels" ? "reel" : m[1].toLowerCase();
+    const src = `https://www.instagram.com/${kind}/${m[2]}/embed/`;
+
+    const card = document.createElement("div");
+    card.className = "ig-embed";
+    card.setAttribute("role", "button");
+    card.tabIndex = 0;
+    card.innerHTML = `<span class="ig-label">Instagram ${kind === "reel" ? "reel" : "post"}</span><span class="ig-hint">Tap to load</span>`;
+    const load = () => {
+      const frame = document.createElement("iframe");
+      frame.className = "ig-frame";
+      frame.src = src;
+      frame.allow = "encrypted-media; autoplay; fullscreen";
+      frame.allowFullscreen = true;
+      frame.setAttribute("scrolling", "no");
+      card.replaceWith(frame);
+    };
+    card.onclick = load;
+    card.onkeydown = (e) => { if (e.key === "Enter") load(); };
+    return card;
+  }
+
   function summarize(m) {
     if (!m) return "a message";
     if (m.type === "image") return "📷 Image";
@@ -388,6 +428,11 @@
     }
 
     wrap.appendChild(group);
+
+    if (m.type === "text") {
+      const ig = renderInstagramEmbed(m.content);
+      if (ig) { wrap.classList.add("has-embed"); wrap.appendChild(ig); }
+    }
 
     if (m.created_at) {
       const time = document.createElement("div");

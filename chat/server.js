@@ -312,6 +312,9 @@ function extractMetaTag(html, property) {
 async function generateLinkPreview(text) {
   const url = extractFirstUrl(text);
   if (!url) return null;
+  // Instagram serves a login page to server-side fetches, so a preview card would just say
+  // "Instagram". The chat page embeds reels itself instead.
+  try { if (/(^|\.)instagram\.com$/i.test(new URL(url).hostname)) return null; } catch { return null; }
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(4000),
