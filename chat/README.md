@@ -21,6 +21,7 @@ Three pieces:
    - `JWT_SECRET` — run `openssl rand -hex 32` locally, or any long random string
    - `ADMIN_PASSWORD` — the password you'll use to log into `admin.html`
    - `ALLOWED_ORIGIN` — `https://hellold6.github.io`
+   - `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded Firebase service account JSON; required for Android push notifications
 5. Deploy. Render gives you a URL like `https://your-app.onrender.com` — that's your backend URL.
 
 Note: Render's free tier spins the server down after 15 minutes of inactivity, so the first message after a quiet period takes ~30 seconds to wake up. Fine for a personal site; upgrade to a paid instance later if that ever bugs you.
@@ -40,6 +41,7 @@ Note: Render's free tier spins the server down after 15 minutes of inactivity, s
 - A visitor opens `chat.html`, registers a username + password (hashed with bcrypt, never stored in plain text), and lands in their own private thread.
 - You open `admin.html`, log in with `ADMIN_PASSWORD`, see every conversation in a sidebar, click one, and reply — it shows up live in their chat.
 - Everything is saved to Postgres permanently, so history survives refreshes, restarts, and redeploys.
+- For Android push notifications to reach your phone while the app is closed, the Android app must load `admin.html` and call `window.registerFcmToken(fcmToken)` with its current FCM token. The authenticated admin page registers the token with the backend; user messages are then sent to that device through Firebase Cloud Messaging.
 - Add recent game updates to `changelog.txt` beside the deployed `chat.html` (or keep it at `/chat/changelog.txt`). The notice appears once per browser for each distinct version of the file; changing the text makes it appear again.
 
 ## Extending it later

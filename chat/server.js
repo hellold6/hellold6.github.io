@@ -78,6 +78,35 @@ async function sendPushNotification(userId, payload) {
   }
 }
 
+async function sendAdminPushNotification(username, payload) {
+  if (!pushEnabled) return;
+  const result = await pool.query('SELECT fcm_token FROM admin_push_token WHERE id = 1');
+  const fcmToken = result.rows[0]?.fcm_token;
+  if (!fcmToken) return;
+
+  const body = payload.type === 'image' ? '📷 Sent an image' : payload.type === 'video' ? '🎥 Sent a video' : payload.content;
+  const title = `New message from ${username}`;
+
+  try {
+    await admin.messaging().send({
+      token: fcmToken,
+      data: {
+        type: 'admin-chat-message',
+        title,
+        body: body.slice(0, 150),
+        userId: String(payload.user_id || ''),
+      },
+      android: { priority: 'high' },
+    });
+  } catch (err) {
+    if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
+      await pool.query('DELETE FROM admin_push_token WHERE id = 1');
+    } else {
+      console.error('Admin push notification failed:', err.message);
+    }
+  }
+}
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }, // needed for Supabase/Render-style managed Postgres
@@ -93,6 +122,11 @@ async function migrate() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
+    CREATE TABLE IF NOT EXISTS admin_push_token (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      fcm_token TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS messages (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -204,6 +238,17 @@ app.post('/api/admin/login', (req, res) => {
   const { password } = req.body || {};
   if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Wrong password' });
   res.json({ token: signAdminToken() });
+});
+
+app.post('/api/admin/push/register', authMiddleware, requireAdmin, async (req, res) => {
+  const { fcmToken } = req.body || {};
+  if (!fcmToken || typeof fcmToken !== 'string') return res.status(400).json({ error: 'Missing fcmToken' });
+  await pool.query(`
+    INSERT INTO admin_push_token (id, fcm_token, updated_at)
+    VALUES (1, $1, now())
+    ON CONFLICT (id) DO UPDATE SET fcm_token = EXCLUDED.fcm_token, updated_at = now()
+  `, [fcmToken]);
+  res.json({ ok: true });
 });
 
 app.get('/api/admin/conversations', authMiddleware, requireAdmin, async (req, res) => {
@@ -406,6 +451,7 @@ async function deliverUserMessage(userId, username, content, type = 'text', repl
   io.to(`user-${userId}`).emit('message', payload);
   io.to('admin-room').emit('new-message', { userId, username, ...payload });
   notifyDiscordNewMessage(userId, username, payload).catch((err) => console.error('Discord notify failed:', err));
+  sendAdminPushNotification(username, { ...payload, user_id: userId }).catch((err) => console.error('Admin push notification failed:', err));
   if (type === 'text') {
     attachLinkPreview(payload.id, trimmed, [`user-${userId}`, 'admin-room']).catch((err) => console.error(err));
   }

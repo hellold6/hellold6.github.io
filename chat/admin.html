@@ -236,9 +236,24 @@
   let socket = null;
   let activeUserId = null;
   let conversations = [];
+  let pendingFcmToken = null;
   const messageEls = new Map(); // message id -> DOM element, for attaching late link previews
   const messageData = new Map(); // message id -> {sender, type, content}, for rendering quoted replies
   let replyingTo = null; // { id, sender, type, content } | null
+
+  function registerFcmToken(fcmToken) {
+    if (!fcmToken || typeof fcmToken !== "string") return;
+    pendingFcmToken = fcmToken;
+    if (!token) return;
+    fetch(`${API_BASE}/api/admin/push/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fcmToken }),
+    }).then((res) => {
+      if (!res.ok) throw new Error(`Admin push token registration failed (${res.status})`);
+    }).catch((error) => console.error(error));
+  }
+  window.registerFcmToken = registerFcmToken;
 
   const loginCard = document.getElementById("login-card");
   const dashboard = document.getElementById("dashboard");
@@ -278,6 +293,7 @@
       hideServerRestartPopup();
       token = data.token;
       localStorage.setItem("admin_token", token);
+      if (pendingFcmToken) registerFcmToken(pendingFcmToken);
       startDashboard();
     } catch {
       loginError.textContent = "Couldn't reach the server.";
