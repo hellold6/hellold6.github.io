@@ -219,7 +219,7 @@
       </div>
       <div class="composer" id="composer" style="display:none;">
         <button id="attach-btn" title="Send an image or video">📎</button>
-        <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif,image/avif,video/mp4,video/webm,video/quicktime" />
+        <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif,image/avif,video/mp4,video/webm,video/quicktime,video/3gpp,video/3gpp2,video/x-m4v" />
         <input id="message-input" type="text" placeholder="Reply..." />
         <button id="send-btn">Send</button>
       </div>
@@ -586,14 +586,28 @@
   const VIDEO_MAX_DIMENSION = 854; // ~480p on the long side
   const VIDEO_BITRATE = 1_200_000; // ~1.2 Mbps
 
+  function normalizeVideoMimeType(file) {
+    const type = (file.type || "").toLowerCase();
+    if (type.includes("quicktime")) return "video/quicktime";
+    if (type.includes("mp4")) return "video/mp4";
+    if (type.includes("webm")) return "video/webm";
+    if (type.includes("3gpp")) return "video/3gpp";
+    if (type.includes("x-m4v")) return "video/x-m4v";
+    return "video/mp4";
+  }
+
   function canCompressVideo() {
     return typeof MediaRecorder !== "undefined"
-      && typeof HTMLVideoElement.prototype.captureStream === "function";
+      && typeof HTMLVideoElement !== "undefined"
+      && typeof HTMLVideoElement.prototype.captureStream === "function"
+      && typeof HTMLCanvasElement !== "undefined"
+      && typeof HTMLCanvasElement.prototype.captureStream === "function";
   }
 
   function compressVideo(file, onProgress) {
     return new Promise((resolve, reject) => {
-      if (!canCompressVideo()) { resolve({ blob: file, mimeType: file.type }); return; }
+      const fallbackMimeType = normalizeVideoMimeType(file);
+      if (!canCompressVideo()) { resolve({ blob: file, mimeType: fallbackMimeType }); return; }
 
       const video = document.createElement("video");
       video.muted = false;
@@ -618,6 +632,12 @@
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
+
+        if (!canvas.captureStream) {
+          URL.revokeObjectURL(video.src);
+          resolve({ blob: file, mimeType: fallbackMimeType });
+          return;
+        }
 
         const canvasStream = canvas.captureStream(30);
         try {

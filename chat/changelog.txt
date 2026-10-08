@@ -1,1 +1,1 @@
-added support for more photos
+fixed video maybe

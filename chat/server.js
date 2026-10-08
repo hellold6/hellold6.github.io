@@ -234,7 +234,14 @@ const ALLOWED_IMAGE_TYPES = {
   'image/avif': 'jpg',
   'image/bmp': 'jpg'
 };
-const ALLOWED_VIDEO_TYPES = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
+const ALLOWED_VIDEO_TYPES = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/3gpp': '3gp',
+  'video/3gpp2': '3g2',
+  'video/x-m4v': 'm4v'
+};
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_VIDEO_BYTES = 25 * 1024 * 1024; // 25MB — client compresses before this, so this is a ceiling, not a target
 
