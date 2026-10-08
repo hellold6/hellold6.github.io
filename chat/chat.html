@@ -413,16 +413,38 @@
 
   async function maybeShowChangelog() {
     try {
-      const response = await fetch(new URL("changelog.txt", window.location.href), { cache: "no-store" });
-      if (!response.ok) throw new Error(`Changelog request failed: ${response.status}`);
-
-      const content = (await response.text()).trim();
+      const changelogUrls = [
+        new URL("changelog.txt", window.location.href),
+        new URL("/chat/changelog.txt", window.location.origin),
+      ];
+      let content;
+      let lastError;
+      for (const url of new Set(changelogUrls.map((candidate) => candidate.href))) {
+        try {
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) {
+            lastError = new Error(`Changelog request failed (${response.status}): ${url}`);
+            continue;
+          }
+          content = (await response.text()).trim();
+          break;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (content === undefined) throw lastError || new Error("Couldn't load the changelog.");
       if (!content) return;
 
       try {
         if (localStorage.getItem(CHANGELOG_SEEN_KEY) === content) return;
       } catch (error) {
         console.error("Couldn't check whether the changelog was already shown.", error);
+      }
+
+      try {
+        localStorage.setItem(CHANGELOG_SEEN_KEY, content);
+      } catch (error) {
+        console.error("Couldn't save that the changelog was shown.", error);
       }
 
       const overlay = document.getElementById("changelog-overlay");
@@ -435,11 +457,6 @@
       document.getElementById("changelog-dismiss").onclick = () => {
         overlay.style.display = "none";
         overlay.setAttribute("aria-hidden", "true");
-        try {
-          localStorage.setItem(CHANGELOG_SEEN_KEY, content);
-        } catch (error) {
-          console.error("Couldn't save that the changelog was shown.", error);
-        }
       };
     } catch (error) {
       console.error("Couldn't load the recent-games changelog.", error);
@@ -679,7 +696,6 @@
     authCard.style.display = "none";
     chatView.style.display = "flex";
     loadHistory();
-    maybeShowChangelog();
 
     if (pendingFcmToken) { sendFcmToken(pendingFcmToken); pendingFcmToken = null; }
 
@@ -899,6 +915,7 @@
   });
 
   maybeShowUpdateBanner();
+  maybeShowChangelog();
   if (token) startChat();
 </script>
 </body>
