@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
 const { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const admin = require('firebase-admin');
 
 const {
   DATABASE_URL,
@@ -19,6 +20,7 @@ const {
   SUPABASE_URL, // e.g. https://tcvhviwiadnynzluhmmv.supabase.co
   SUPABASE_SERVICE_ROLE_KEY,
   SUPABASE_STORAGE_BUCKET = 'chat-uploads',
+  FIREBASE_SERVICE_ACCOUNT_BASE64, // base64 of the Firebase service account JSON (see README)
   PORT = 3000,
 } = process.env;
 
@@ -32,6 +34,49 @@ if (!imagesEnabled) {
   console.log('Image uploads not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing) — skipping.');
 }
 
+// ---------- Push notifications (Firebase Cloud Messaging) ----------
+
+let pushEnabled = false;
+if (FIREBASE_SERVICE_ACCOUNT_BASE64) {
+  try {
+    const serviceAccount = JSON.parse(Buffer.from(FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8'));
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    pushEnabled = true;
+  } catch (err) {
+    console.error('Failed to initialize Firebase Admin (check FIREBASE_SERVICE_ACCOUNT_BASE64):', err.message);
+  }
+} else {
+  console.log('Push notifications not configured (FIREBASE_SERVICE_ACCOUNT_BASE64 missing) — skipping.');
+}
+
+async function sendPushNotification(userId, payload) {
+  if (!pushEnabled) return;
+  const result = await pool.query('SELECT fcm_token FROM users WHERE id = $1', [userId]);
+  const fcmToken = result.rows[0]?.fcm_token;
+  if (!fcmToken) return;
+
+  const body = payload.type === 'image' ? '📷 Sent an image' : payload.type === 'video' ? '🎥 Sent a video' : payload.content;
+
+  try {
+    // Data-only (no top-level "notification" field) so the app always builds
+    // and displays the notification itself — consistent behavior whether the
+    // app is foregrounded, backgrounded, or not running.
+    await admin.messaging().send({
+      token: fcmToken,
+      data: { type: 'chat-message', title: 'Willow', body: body.slice(0, 150) },
+      android: { priority: 'high' },
+    });
+  } catch (err) {
+    // A token that's invalid/expired/uninstalled comes back as one of these —
+    // clear it so we stop trying to push to a dead device.
+    if (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token') {
+      await pool.query('UPDATE users SET fcm_token = NULL WHERE id = $1', [userId]);
+    } else {
+      console.error('Push notification failed:', err.message);
+    }
+  }
+}
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }, // needed for Supabase/Render-style managed Postgres
@@ -43,8 +88,10 @@ async function migrate() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      fcm_token TEXT,
       created_at TIMESTAMPTZ DEFAULT now()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
     CREATE TABLE IF NOT EXISTS messages (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -136,6 +183,14 @@ app.get('/api/messages', authMiddleware, async (req, res) => {
     [req.auth.id]
   );
   res.json(result.rows);
+});
+
+app.post('/api/push/register', authMiddleware, async (req, res) => {
+  if (req.auth.role !== 'user') return res.status(403).json({ error: 'User only' });
+  const { fcmToken } = req.body || {};
+  if (!fcmToken || typeof fcmToken !== 'string') return res.status(400).json({ error: 'Missing fcmToken' });
+  await pool.query('UPDATE users SET fcm_token = $1 WHERE id = $2', [fcmToken, req.auth.id]);
+  res.json({ ok: true });
 });
 
 // ---------- REST: admin (you) ----------
@@ -333,6 +388,7 @@ async function deliverAdminReply(userId, content, type = 'text', replyTo = null)
   if (type === 'text') {
     attachLinkPreview(payload.id, trimmed, [`user-${userId}`]).catch((err) => console.error(err));
   }
+  sendPushNotification(userId, payload).catch((err) => console.error('Push notification failed:', err));
   return payload;
 }
 

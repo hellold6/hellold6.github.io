@@ -292,6 +292,21 @@
   const messageData = new Map(); // message id -> {sender, type, content}, for rendering quoted replies
   let replyingTo = null; // { id, sender, type, content } | null
 
+  // ---------- Push notifications (Android app bridge) ----------
+  // The wrapped Android app calls window.registerFcmToken(token) after it
+  // obtains a Firebase push token — once on launch, and again if the token
+  // ever rotates. A plain browser tab never calls this, so it's inert there.
+  let pendingFcmToken = null;
+  function sendFcmToken(fcmToken) {
+    if (!token) { pendingFcmToken = fcmToken; return; }
+    fetch(`${API_BASE}/api/push/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fcmToken }),
+    }).catch(() => {});
+  }
+  window.registerFcmToken = sendFcmToken;
+
   const authCard = document.getElementById("auth-card");
   const chatView = document.getElementById("chat-view");
   const authTagline = document.getElementById("auth-tagline");
@@ -475,6 +490,8 @@
     authCard.style.display = "none";
     chatView.style.display = "flex";
     loadHistory();
+
+    if (pendingFcmToken) { sendFcmToken(pendingFcmToken); pendingFcmToken = null; }
 
     socket = io(API_BASE, { auth: { token } });
     socket.on("message", (m) => {
