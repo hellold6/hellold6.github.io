@@ -250,6 +250,23 @@
   #update-banner button { padding: 9px 12px; font-size: 0.85rem; }
   #update-banner #update-dismiss { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
 
+  /* ---------- Recent games changelog ---------- */
+  #changelog-overlay {
+    display: none; position: fixed; inset: 0; z-index: 60;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(10, 8, 16, 0.76);
+  }
+  #changelog-dialog {
+    width: min(100%, 440px); max-height: min(80dvh, 600px); overflow-y: auto;
+    padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+    background: var(--surface); box-shadow: 0 24px 60px -24px rgba(0,0,0,0.8);
+  }
+  #changelog-dialog h2 {
+    margin: 0 0 16px; font: 700 1.25rem 'Space Grotesk', system-ui, sans-serif;
+  }
+  #changelog-content { color: var(--text-dim); white-space: pre-wrap; line-height: 1.55; }
+  #changelog-dismiss { margin-top: 20px; }
+
   /* ---------- Mobile: full-screen app feel ---------- */
   @media (max-width: 560px) {
     body { padding: 0; align-items: stretch; }
@@ -274,6 +291,14 @@
     <button id="update-copy">Copy link</button>
     <button id="update-dismiss">Not now</button>
   </div>
+</div>
+
+<div id="changelog-overlay" aria-hidden="true">
+  <section id="changelog-dialog" role="dialog" aria-modal="true" aria-labelledby="changelog-title" tabindex="-1">
+    <h2 id="changelog-title">NEW FEATURES</h2>
+    <div id="changelog-content"></div>
+    <button id="changelog-dismiss">Got it</button>
+  </section>
 </div>
 
 <div class="card" id="auth-card">
@@ -335,6 +360,7 @@
   // versionCode in the Android project's app/build.gradle.kts).
   const LATEST_APP_VERSION = 2;
   const APP_UPDATE_URL = "https://github.com/hellold6/hellold6.github.io/releases/latest";
+  const CHANGELOG_SEEN_KEY = "chat_changelog_seen";
 
   // Apps from v2 onward add "WillowChatApp/<versionCode>" to the WebView's
   // user agent. The original app has no marker, so "inside an Android WebView
@@ -383,6 +409,41 @@
       banner.style.display = "none";
       try { localStorage.setItem("update_dismissed", String(LATEST_APP_VERSION)); } catch {}
     };
+  }
+
+  async function maybeShowChangelog() {
+    try {
+      const response = await fetch(new URL("changelog.txt", window.location.href), { cache: "no-store" });
+      if (!response.ok) throw new Error(`Changelog request failed: ${response.status}`);
+
+      const content = (await response.text()).trim();
+      if (!content) return;
+
+      try {
+        if (localStorage.getItem(CHANGELOG_SEEN_KEY) === content) return;
+      } catch (error) {
+        console.error("Couldn't check whether the changelog was already shown.", error);
+      }
+
+      const overlay = document.getElementById("changelog-overlay");
+      const dialog = document.getElementById("changelog-dialog");
+      document.getElementById("changelog-content").textContent = content;
+      overlay.style.display = "flex";
+      overlay.setAttribute("aria-hidden", "false");
+      dialog.focus();
+
+      document.getElementById("changelog-dismiss").onclick = () => {
+        overlay.style.display = "none";
+        overlay.setAttribute("aria-hidden", "true");
+        try {
+          localStorage.setItem(CHANGELOG_SEEN_KEY, content);
+        } catch (error) {
+          console.error("Couldn't save that the changelog was shown.", error);
+        }
+      };
+    } catch (error) {
+      console.error("Couldn't load the recent-games changelog.", error);
+    }
   }
 
   // ---------- Push notifications (Android app bridge) ----------
@@ -618,6 +679,7 @@
     authCard.style.display = "none";
     chatView.style.display = "flex";
     loadHistory();
+    maybeShowChangelog();
 
     if (pendingFcmToken) { sendFcmToken(pendingFcmToken); pendingFcmToken = null; }
 

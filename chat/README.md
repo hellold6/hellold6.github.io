@@ -40,6 +40,7 @@ Note: Render's free tier spins the server down after 15 minutes of inactivity, s
 - A visitor opens `chat.html`, registers a username + password (hashed with bcrypt, never stored in plain text), and lands in their own private thread.
 - You open `admin.html`, log in with `ADMIN_PASSWORD`, see every conversation in a sidebar, click one, and reply — it shows up live in their chat.
 - Everything is saved to Postgres permanently, so history survives refreshes, restarts, and redeploys.
+- Add recent game updates to `changelog.txt` beside `chat.html`. The chat displays the text once per browser for each distinct version of the file; changing the file makes the notice appear again.
 
 ## Extending it later
 
