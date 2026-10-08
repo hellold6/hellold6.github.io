@@ -223,7 +223,17 @@ app.get('/api/admin/messages/:userId', authMiddleware, requireAdmin, async (req,
 
 // ---------- REST: media upload (images + videos; both visitors and admin use this) ----------
 
-const ALLOWED_IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+const ALLOWED_IMAGE_TYPES = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/heic': 'jpg',
+  'image/heif': 'jpg',
+  'image/avif': 'jpg',
+  'image/bmp': 'jpg'
+};
 const ALLOWED_VIDEO_TYPES = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' };
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_VIDEO_BYTES = 25 * 1024 * 1024; // 25MB — client compresses before this, so this is a ceiling, not a target
@@ -233,11 +243,12 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
   const { data, mimeType } = req.body || {};
   if (!data || !mimeType) return res.status(400).json({ error: 'Missing file data' });
 
+  const normalizedMimeType = String(mimeType).toLowerCase();
   let ext, maxBytes, folder;
-  if (ALLOWED_IMAGE_TYPES[mimeType]) {
-    ext = ALLOWED_IMAGE_TYPES[mimeType]; maxBytes = MAX_IMAGE_BYTES; folder = 'images';
-  } else if (ALLOWED_VIDEO_TYPES[mimeType]) {
-    ext = ALLOWED_VIDEO_TYPES[mimeType]; maxBytes = MAX_VIDEO_BYTES; folder = 'videos';
+  if (ALLOWED_IMAGE_TYPES[normalizedMimeType]) {
+    ext = ALLOWED_IMAGE_TYPES[normalizedMimeType]; maxBytes = MAX_IMAGE_BYTES; folder = 'images';
+  } else if (ALLOWED_VIDEO_TYPES[normalizedMimeType]) {
+    ext = ALLOWED_VIDEO_TYPES[normalizedMimeType]; maxBytes = MAX_VIDEO_BYTES; folder = 'videos';
   } else {
     return res.status(400).json({ error: 'Unsupported file type' });
   }

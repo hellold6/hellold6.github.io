@@ -185,6 +185,13 @@
 </head>
 <body>
 
+<div id="server-restart-overlay" aria-hidden="true">
+  <div id="server-restart-dialog" role="dialog" aria-modal="true" aria-labelledby="server-restart-title">
+    <h2 id="server-restart-title">server is restarting for an update</h2>
+    <p>Please try again in a moment.</p>
+  </div>
+</div>
+
 <div id="login-card">
   <h2>Admin Login</h2>
   <p class="tagline">Enter your admin password to continue.</p>
@@ -212,7 +219,7 @@
       </div>
       <div class="composer" id="composer" style="display:none;">
         <button id="attach-btn" title="Send an image or video">📎</button>
-        <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime" />
+        <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif,image/avif,video/mp4,video/webm,video/quicktime" />
         <input id="message-input" type="text" placeholder="Reply..." />
         <button id="send-btn">Send</button>
       </div>
@@ -237,6 +244,20 @@
   const dashboard = document.getElementById("dashboard");
   const loginError = document.getElementById("login-error");
   const attachInput = document.getElementById("attach-input");
+
+  function showServerRestartPopup() {
+    const overlay = document.getElementById("server-restart-overlay");
+    if (!overlay) return;
+    overlay.style.display = "flex";
+    overlay.setAttribute("aria-hidden", "false");
+  }
+
+  function hideServerRestartPopup() {
+    const overlay = document.getElementById("server-restart-overlay");
+    if (!overlay) return;
+    overlay.style.display = "none";
+    overlay.setAttribute("aria-hidden", "true");
+  }
   const layoutEl = document.getElementById("layout");
   const sendBtn = document.getElementById("send-btn");
   const replyPreview = document.getElementById("reply-preview");
@@ -254,11 +275,13 @@
       });
       const data = await res.json();
       if (!res.ok) { loginError.textContent = data.error || "Login failed."; return; }
+      hideServerRestartPopup();
       token = data.token;
       localStorage.setItem("admin_token", token);
       startDashboard();
     } catch {
       loginError.textContent = "Couldn't reach the server.";
+      showServerRestartPopup();
     }
   };
 
@@ -266,7 +289,7 @@
     const res = await fetch(`${API_BASE}/api/admin/conversations`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) { logout(); return; }
+    if (!res.ok) { showServerRestartPopup(); logout(); return; }
     conversations = await res.json();
     renderConversationList();
   }
@@ -472,6 +495,9 @@
     loadConversations();
 
     socket = io(API_BASE, { auth: { token } });
+    socket.on("connect", () => {
+      hideServerRestartPopup();
+    });
     socket.on("new-message", ({ userId }) => {
       loadConversations();
       if (userId === activeUserId) openConversation(userId, currentName());
@@ -485,7 +511,10 @@
       const wrap = messageEls.get(id);
       if (wrap) wrap.appendChild(renderPreviewCard(link_preview));
     });
-    socket.on("connect_error", () => logout());
+    socket.on("connect_error", () => {
+      showServerRestartPopup();
+      logout();
+    });
   }
 
   function currentName() {
@@ -520,7 +549,8 @@
 
   function compressImage(file) {
     return new Promise((resolve, reject) => {
-      if (file.type === "image/gif") { resolve({ blob: file, mimeType: file.type }); return; }
+      const type = (file.type || "").toLowerCase();
+      if (type === "image/gif") { resolve({ blob: file, mimeType: file.type || "image/gif" }); return; }
 
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);

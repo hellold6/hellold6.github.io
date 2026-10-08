@@ -241,6 +241,23 @@
     background: var(--surface-raised); border-bottom: 1px solid var(--accent);
     font-size: 0.85rem; line-height: 1.45;
   }
+  #server-restart-overlay {
+    display: none; position: fixed; inset: 0; z-index: 90;
+    align-items: center; justify-content: center; padding: 24px;
+    background: rgba(10, 8, 16, 0.78);
+  }
+  #server-restart-dialog {
+    width: min(100%, 360px); padding: 24px 20px; border-radius: var(--radius-lg);
+    border: 1px solid var(--border); background: var(--surface);
+    box-shadow: 0 24px 60px -24px rgba(0,0,0,0.8);
+    text-align: center;
+  }
+  #server-restart-dialog h2 {
+    margin: 0 0 12px; font-size: 1.15rem; color: var(--text);
+  }
+  #server-restart-dialog p {
+    margin: 0; color: var(--text-dim); line-height: 1.5;
+  }
   #update-banner .update-title { font-weight: 600; margin-bottom: 4px; }
   #update-banner .update-url {
     display: block; margin: 8px 0; padding: 8px 10px; border-radius: 8px;
@@ -294,6 +311,13 @@
   </div>
 </div>
 
+<div id="server-restart-overlay" aria-hidden="true">
+  <div id="server-restart-dialog" role="dialog" aria-modal="true" aria-labelledby="server-restart-title">
+    <h2 id="server-restart-title">server is restarting for an update</h2>
+    <p>Please try again in a moment.</p>
+  </div>
+</div>
+
 <div id="changelog-overlay" aria-hidden="true">
   <section id="changelog-dialog" role="dialog" aria-modal="true" aria-labelledby="changelog-title" tabindex="-1">
     <h2 id="changelog-title">NEW FEATURES</h2>
@@ -336,7 +360,7 @@
   </div>
   <div class="composer">
     <button id="attach-btn" class="icon-btn" title="Send an image or video">📎</button>
-    <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime" />
+    <input id="attach-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif,image/avif,video/mp4,video/webm,video/quicktime" />
     <div class="composer-pill">
       <input id="message-input" type="text" placeholder="Message Willow..." />
     </div>
@@ -487,6 +511,20 @@
   const switchText = document.getElementById("switch-text");
   const switchLink = document.getElementById("switch-link");
   const messagesEl = document.getElementById("messages");
+
+  function showServerRestartPopup() {
+    const overlay = document.getElementById("server-restart-overlay");
+    if (!overlay) return;
+    overlay.style.display = "flex";
+    overlay.setAttribute("aria-hidden", "false");
+  }
+
+  function hideServerRestartPopup() {
+    const overlay = document.getElementById("server-restart-overlay");
+    if (!overlay) return;
+    overlay.style.display = "none";
+    overlay.setAttribute("aria-hidden", "true");
+  }
   const messageInput = document.getElementById("message-input");
   const attachInput = document.getElementById("attach-input");
   const sendBtn = document.getElementById("send-btn");
@@ -520,11 +558,13 @@
       });
       const data = await res.json();
       if (!res.ok) { authError.textContent = data.error || "Something went wrong."; return; }
+      hideServerRestartPopup();
       token = data.token;
       localStorage.setItem("chat_token", token);
       startChat();
     } catch {
       authError.textContent = "Couldn't reach the server.";
+      showServerRestartPopup();
     }
   };
 
@@ -532,7 +572,7 @@
     const res = await fetch(`${API_BASE}/api/messages`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) { logout(); return; }
+    if (!res.ok) { showServerRestartPopup(); logout(); return; }
     const msgs = await res.json();
     messagesEl.innerHTML = "";
     messageEls.clear();
@@ -701,6 +741,9 @@
     if (pendingFcmToken) { sendFcmToken(pendingFcmToken); pendingFcmToken = null; }
 
     socket = io(API_BASE, { auth: { token } });
+    socket.on("connect", () => {
+      hideServerRestartPopup();
+    });
     socket.on("message", (m) => {
       renderMessage(m);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -709,7 +752,10 @@
       const wrap = messageEls.get(id);
       if (wrap) wrap.appendChild(renderPreviewCard(link_preview));
     });
-    socket.on("connect_error", () => { logout(); });
+    socket.on("connect_error", () => {
+      showServerRestartPopup();
+      logout();
+    });
   }
 
   function logout() {
@@ -739,7 +785,8 @@
 
   function compressImage(file) {
     return new Promise((resolve, reject) => {
-      if (file.type === "image/gif") { resolve({ blob: file, mimeType: file.type }); return; }
+      const type = (file.type || "").toLowerCase();
+      if (type === "image/gif") { resolve({ blob: file, mimeType: file.type || "image/gif" }); return; }
 
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
