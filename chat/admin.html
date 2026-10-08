@@ -659,7 +659,7 @@
         recorder.onstop = () => {
           URL.revokeObjectURL(video.src);
           const encoded = new Blob(chunks, { type: mimeType });
-          if (encoded.size === 0) {
+          if (encoded.size === 0 || (file.size > 1024 && encoded.size < 1024)) {
             resolve({ blob: file, mimeType: fallbackMimeType });
             return;
           }
@@ -729,7 +729,7 @@
       return;
     }
 
-    if (!blob || blob.size <= 0) {
+    if (!blob || blob.size <= 0 || (isVideo && blob.size < 1024 && file.size > 1024)) {
       alert("This file is empty or could not be read.");
       uploadStatus.style.display = "none";
       sendBtn.disabled = false;
@@ -738,18 +738,15 @@
 
     uploadStatus.textContent = "Uploading…";
     const safeMimeType = normalizeMimeType(mimeType || (isVideo ? "video/mp4" : "image/jpeg"));
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
 
     try {
+      const formData = new FormData();
+      formData.append("file", blob, file.name || `upload.${isVideo ? "mp4" : "jpg"}`);
+      formData.append("mimeType", safeMimeType);
       const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ data: base64, mimeType: safeMimeType }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Upload failed."); return; }

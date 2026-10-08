@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
+const multer = require('multer');
 const { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const admin = require('firebase-admin');
 
@@ -117,7 +118,11 @@ async function migrate() {
 
 const app = express();
 app.use(cors({ origin: ALLOWED_ORIGIN || '*' }));
-app.use(express.json({ limit: '35mb' })); // base64-encoded video is the biggest payload we accept
+app.use(express.json({ limit: '35mb' }));
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 35 * 1024 * 1024 },
+});
 
 // ---------- Auth helpers ----------
 
@@ -245,12 +250,22 @@ const ALLOWED_VIDEO_TYPES = {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_VIDEO_BYTES = 25 * 1024 * 1024; // 25MB — client compresses before this, so this is a ceiling, not a target
 
-app.post('/api/upload', authMiddleware, async (req, res) => {
+app.post('/api/upload', authMiddleware, upload.single('file'), async (req, res) => {
   if (!imagesEnabled) return res.status(503).json({ error: 'Uploads are not configured on this server' });
-  const { data, mimeType } = req.body || {};
-  if (!data || !mimeType) return res.status(400).json({ error: 'Missing file data' });
 
-  const normalizedMimeType = String(mimeType).split(';')[0].trim().toLowerCase();
+  let fileBuffer = req.file?.buffer;
+  let mimeType = req.file?.mimetype || req.body?.mimeType || '';
+
+  if (!fileBuffer && req.body?.data) {
+    mimeType = req.body.mimeType || '';
+    fileBuffer = Buffer.from(req.body.data, 'base64');
+  }
+
+  if (!fileBuffer || fileBuffer.length <= 0) {
+    return res.status(400).json({ error: 'File is empty or unreadable' });
+  }
+
+  const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
   let ext, maxBytes, folder;
   if (ALLOWED_IMAGE_TYPES[normalizedMimeType]) {
     ext = ALLOWED_IMAGE_TYPES[normalizedMimeType]; maxBytes = MAX_IMAGE_BYTES; folder = 'images';
@@ -260,11 +275,7 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Unsupported file type' });
   }
 
-  const buffer = Buffer.from(data, 'base64');
-  if (buffer.length <= 0) {
-    return res.status(400).json({ error: 'File is empty or unreadable' });
-  }
-  if (buffer.length > maxBytes) {
+  if (fileBuffer.length > maxBytes) {
     return res.status(413).json({ error: `File must be under ${Math.round(maxBytes / 1024 / 1024)}MB` });
   }
 
@@ -277,7 +288,7 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
         apikey: SUPABASE_SERVICE_ROLE_KEY,
         'Content-Type': normalizedMimeType,
       },
-      body: buffer,
+      body: fileBuffer,
     });
     if (!uploadRes.ok) {
       const text = await uploadRes.text();
