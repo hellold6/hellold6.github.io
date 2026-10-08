@@ -257,9 +257,10 @@
 
 <div id="update-banner">
   <div class="update-title">A new version of the app is available</div>
-  <div>Update to get a notification when Willow replies. Copy this link, paste it into Chrome, then install the downloaded file.</div>
+  <div id="update-desc">Update to get a notification when Willow replies. Copy this link, paste it into Chrome, then install the downloaded file.</div>
   <code class="update-url" id="update-url"></code>
   <div class="update-actions">
+    <button id="update-now" style="display:none">Update now</button>
     <button id="update-copy">Copy link</button>
     <button id="update-dismiss">Not now</button>
   </div>
@@ -346,6 +347,17 @@
     const banner = document.getElementById("update-banner");
     document.getElementById("update-url").textContent = APP_UPDATE_URL;
     banner.style.display = "block";
+
+    // Updated apps expose WillowApp, which downloads and installs the new APK
+    // directly. Older installs don't have it, so they keep the copy-link flow.
+    if (window.WillowApp && typeof window.WillowApp.installUpdate === "function") {
+      document.getElementById("update-desc").textContent = "Update to get the latest changes.";
+      document.getElementById("update-url").style.display = "none";
+      document.getElementById("update-copy").style.display = "none";
+      const nowBtn = document.getElementById("update-now");
+      nowBtn.style.display = "block";
+      nowBtn.onclick = () => { window.WillowApp.installUpdate(); nowBtn.textContent = "Starting…"; };
+    }
 
     const copyBtn = document.getElementById("update-copy");
     copyBtn.onclick = async () => {
