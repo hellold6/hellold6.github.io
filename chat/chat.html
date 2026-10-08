@@ -223,6 +223,23 @@
     display: none; font-size: 0.78rem; color: var(--text-dim); padding: 4px 16px;
   }
 
+  /* ---------- Update banner (shown only inside an outdated Android app) ---------- */
+  #update-banner {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    padding: calc(12px + var(--safe-top)) 16px 12px;
+    background: var(--surface-raised); border-bottom: 1px solid var(--accent);
+    font-size: 0.85rem; line-height: 1.45;
+  }
+  #update-banner .update-title { font-weight: 600; margin-bottom: 4px; }
+  #update-banner .update-url {
+    display: block; margin: 8px 0; padding: 8px 10px; border-radius: 8px;
+    background: #140F20; color: var(--accent-2); word-break: break-all;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; user-select: all;
+  }
+  #update-banner .update-actions { display: flex; gap: 8px; }
+  #update-banner button { padding: 9px 12px; font-size: 0.85rem; }
+  #update-banner #update-dismiss { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+
   /* ---------- Mobile: full-screen app feel ---------- */
   @media (max-width: 560px) {
     body { padding: 0; align-items: stretch; }
@@ -237,6 +254,16 @@
 </style>
 </head>
 <body>
+
+<div id="update-banner">
+  <div class="update-title">A new version of the app is available</div>
+  <div>Update to get a notification when Willow replies. Copy this link, paste it into Chrome, then install the downloaded file.</div>
+  <code class="update-url" id="update-url"></code>
+  <div class="update-actions">
+    <button id="update-copy">Copy link</button>
+    <button id="update-dismiss">Not now</button>
+  </div>
+</div>
 
 <div class="card" id="auth-card">
   <div class="brand">Chat with Willow</div>
@@ -291,6 +318,50 @@
   const messageEls = new Map(); // message id -> DOM element, so link previews can attach later
   const messageData = new Map(); // message id -> {sender, type, content}, for rendering quoted replies
   let replyingTo = null; // { id, sender, type, content } | null
+
+  // ---------- Update banner for the Android app ----------
+  // Bump LATEST_APP_VERSION whenever you publish a new APK (it must match the
+  // versionCode in the Android project's app/build.gradle.kts).
+  const LATEST_APP_VERSION = 2;
+  const APP_UPDATE_URL = "https://github.com/hellold6/hellold6.github.io/releases/latest";
+
+  // Apps from v2 onward add "WillowChatApp/<versionCode>" to the WebView's
+  // user agent. The original app has no marker, so "inside an Android WebView
+  // with no marker" means an old install.
+  function maybeShowUpdateBanner() {
+    const ua = navigator.userAgent;
+    const marker = ua.match(/WillowChatApp\/(\d+)/);
+    let outdated;
+    if (marker) {
+      outdated = parseInt(marker[1], 10) < LATEST_APP_VERSION;
+    } else {
+      const isWebView = /; wv\)/.test(ua);
+      const isOtherAppBrowser = /FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|Discord|Twitter/i.test(ua);
+      outdated = isWebView && !isOtherAppBrowser;
+    }
+    if (!outdated) return;
+
+    try { if (localStorage.getItem("update_dismissed") === String(LATEST_APP_VERSION)) return; } catch {}
+
+    const banner = document.getElementById("update-banner");
+    document.getElementById("update-url").textContent = APP_UPDATE_URL;
+    banner.style.display = "block";
+
+    const copyBtn = document.getElementById("update-copy");
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(APP_UPDATE_URL);
+        copyBtn.textContent = "Copied";
+      } catch {
+        // Clipboard API unavailable — the link above is selectable, so long-press to copy.
+        copyBtn.textContent = "Long-press the link to copy";
+      }
+    };
+    document.getElementById("update-dismiss").onclick = () => {
+      banner.style.display = "none";
+      try { localStorage.setItem("update_dismissed", String(LATEST_APP_VERSION)); } catch {}
+    };
+  }
 
   // ---------- Push notifications (Android app bridge) ----------
   // The wrapped Android app calls window.registerFcmToken(token) after it
@@ -708,6 +779,7 @@
     }
   });
 
+  maybeShowUpdateBanner();
   if (token) startChat();
 </script>
 </body>
