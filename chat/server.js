@@ -250,7 +250,7 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
   const { data, mimeType } = req.body || {};
   if (!data || !mimeType) return res.status(400).json({ error: 'Missing file data' });
 
-  const normalizedMimeType = String(mimeType).toLowerCase();
+  const normalizedMimeType = String(mimeType).split(';')[0].trim().toLowerCase();
   let ext, maxBytes, folder;
   if (ALLOWED_IMAGE_TYPES[normalizedMimeType]) {
     ext = ALLOWED_IMAGE_TYPES[normalizedMimeType]; maxBytes = MAX_IMAGE_BYTES; folder = 'images';
@@ -261,6 +261,9 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
   }
 
   const buffer = Buffer.from(data, 'base64');
+  if (buffer.length <= 0) {
+    return res.status(400).json({ error: 'File is empty or unreadable' });
+  }
   if (buffer.length > maxBytes) {
     return res.status(413).json({ error: `File must be under ${Math.round(maxBytes / 1024 / 1024)}MB` });
   }
@@ -272,7 +275,7 @@ app.post('/api/upload', authMiddleware, async (req, res) => {
       headers: {
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         apikey: SUPABASE_SERVICE_ROLE_KEY,
-        'Content-Type': mimeType,
+        'Content-Type': normalizedMimeType,
       },
       body: buffer,
     });

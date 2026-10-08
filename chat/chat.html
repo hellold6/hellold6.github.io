@@ -822,6 +822,10 @@
   const VIDEO_MAX_DIMENSION = 854; // ~480p on the long side
   const VIDEO_BITRATE = 1_200_000; // ~1.2 Mbps
 
+  function normalizeMimeType(value) {
+    return String(value || "").split(";")[0].trim().toLowerCase();
+  }
+
   function normalizeVideoMimeType(file) {
     const type = (file.type || "").toLowerCase();
     if (type.includes("quicktime")) return "video/quicktime";
@@ -890,7 +894,12 @@
         recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
         recorder.onstop = () => {
           URL.revokeObjectURL(video.src);
-          resolve({ blob: new Blob(chunks, { type: mimeType }), mimeType: "video/webm" });
+          const encoded = new Blob(chunks, { type: mimeType });
+          if (encoded.size === 0) {
+            resolve({ blob: file, mimeType: fallbackMimeType });
+            return;
+          }
+          resolve({ blob: encoded, mimeType: normalizeMimeType(encoded.type || mimeType || fallbackMimeType) });
         };
         recorder.onerror = (e) => { URL.revokeObjectURL(video.src); reject(e.error || new Error("Recording failed")); };
 
@@ -920,7 +929,8 @@
     attachInput.value = "";
     if (!file || !socket) return;
 
-    const isVideo = file.type.startsWith("video/");
+    const fileName = (file.name || "").toLowerCase();
+    const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|webm|3gp|3g2|m4v)$/i.test(fileName);
     const rawLimit = isVideo ? 150 * 1024 * 1024 : 20 * 1024 * 1024;
     if (file.size > rawLimit) {
       alert(`File must be under ${Math.round(rawLimit / 1024 / 1024)}MB.`);
@@ -955,7 +965,15 @@
       return;
     }
 
+    if (!blob || blob.size <= 0) {
+      alert("This file is empty or could not be read.");
+      uploadStatus.style.display = "none";
+      sendBtn.disabled = false;
+      return;
+    }
+
     uploadStatus.textContent = "Uploading…";
+    const safeMimeType = normalizeMimeType(mimeType || (isVideo ? "video/mp4" : "image/jpeg"));
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(",")[1]);
@@ -967,7 +985,7 @@
       const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ data: base64, mimeType }),
+        body: JSON.stringify({ data: base64, mimeType: safeMimeType }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || "Upload failed."); return; }
