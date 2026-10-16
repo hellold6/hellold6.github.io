@@ -9,14 +9,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f0c16;          /* darker base */
-    --surface: #17121e;     /* main card */
-    --surface-raised: #211827; /* raised bubble */
-    --accent: #ffb86b;      /* warm accent */
-    --accent-ink: #24160a;  /* accent text */
-    --accent-2: #7bd5c9;    /* secondary accent */
-    --text: #f6f3f8;        /* primary text */
-    --text-dim: #9b91a9;    /* muted text */
+    --bg: #0f0c16;
+    --surface: #17121e;
+    --surface-raised: #211827;
+    --accent: #ffb86b;
+    --accent-ink: #24160a;
+    --accent-2: #7bd5c9;
+    --text: #f6f3f8;
+    --text-dim: #9b91a9;
     --border: rgba(255,255,255,0.04);
     --radius-lg: 18px;
     --radius-sm: 12px;
@@ -46,7 +46,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     width: 100%;
-    max-width: 520px; /* slightly wider */
+    max-width: 520px;
     padding: 36px 32px;
     box-shadow: 0 20px 50px rgba(0,0,0,0.6);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -131,32 +131,6 @@
 </head>
 <body>
 
-<div id="update-banner">
-  <div class="update-title">A new version of the app is available</div>
-  <div id="update-desc">Update to get a notification when Willow replies. Copy this link, paste it into Chrome, then install the downloaded file.</div>
-  <code class="update-url" id="update-url"></code>
-  <div class="update-actions">
-    <button id="update-now" style="display:none">Update now</button>
-    <button id="update-copy">Copy link</button>
-    <button id="update-dismiss">Not now</button>
-  </div>
-</div>
-
-<div id="server-restart-overlay" aria-hidden="true">
-  <div id="server-restart-dialog" role="dialog" aria-modal="true" aria-labelledby="server-restart-title">
-    <h2 id="server-restart-title">server is restarting for an update</h2>
-    <p>Please try again in a moment.</p>
-  </div>
-</div>
-
-<div id="changelog-overlay" aria-hidden="true">
-  <section id="changelog-dialog" role="dialog" aria-modal="true" aria-labelledby="changelog-title" tabindex="-1">
-    <h2 id="changelog-title">NEW FEATURES</h2>
-    <div id="changelog-content"></div>
-    <button id="changelog-dismiss">Got it</button>
-  </section>
-</div>
-
 <div class="card" id="auth-card">
   <div class="brand">Chat with Willow</div>
   <p class="tagline" id="auth-tagline">Create an account to start a conversation.</p>
@@ -207,86 +181,11 @@
   let mode = "login"; // or "register"
   let token = localStorage.getItem("chat_token");
   let socket = null;
-  const messageEls = new Map(); // message id -> DOM element, so link previews can attach later
-  const messageData = new Map(); // message id -> {sender, type, content}, for rendering quoted replies
-  let replyingTo = null; // { id, sender, type, content } | null
+  const messageEls = new Map();
+  const messageData = new Map();
+  let replyingTo = null;
 
-  const LATEST_APP_VERSION = 4;
-  const APP_UPDATE_URL = "https://github.com/hellold6/hellold6.github.io/releases/latest";
-  const CHANGELOG_SEEN_KEY = "chat_changelog_seen";
-
-  function maybeShowUpdateBanner() {
-    const ua = navigator.userAgent;
-    const marker = ua.match(/WillowChatApp\/(\d+)/);
-    let outdated;
-    if (marker) {
-      outdated = parseInt(marker[1], 10) < LATEST_APP_VERSION;
-    } else {
-      const isWebView = /; wv\)/.test(ua);
-      const isOtherAppBrowser = /FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|Discord|Twitter/i.test(ua);
-      outdated = isWebView && !isOtherAppBrowser;
-    }
-    if (!outdated) return;
-
-    try { if (localStorage.getItem("update_dismissed") === String(LATEST_APP_VERSION)) return; } catch {}
-
-    const banner = document.getElementById("update-banner");
-    document.getElementById("update-url").textContent = APP_UPDATE_URL;
-    banner.style.display = "block";
-
-    if (window.WillowApp && typeof window.WillowApp.installUpdate === "function") {
-      document.getElementById("update-desc").textContent = "Update to get the latest changes.";
-      document.getElementById("update-url").style.display = "none";
-      document.getElementById("update-copy").style.display = "none";
-      const nowBtn = document.getElementById("update-now");
-      nowBtn.style.display = "block";
-      nowBtn.onclick = () => { window.WillowApp.installUpdate(); nowBtn.textContent = "Starting…"; };
-    }
-
-    const copyBtn = document.getElementById("update-copy");
-    copyBtn.onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(APP_UPDATE_URL);
-        copyBtn.textContent = "Copied";
-      } catch {
-        copyBtn.textContent = "Long-press the link to copy";
-      }
-    };
-    document.getElementById("update-dismiss").onclick = () => {
-      banner.style.display = "none";
-      try { localStorage.setItem("update_dismissed", String(LATEST_APP_VERSION)); } catch {}
-    };
-  }
-
-  async function maybeShowChangelog() {
-    try {
-      const changelogUrls = [
-        new URL("changelog.txt", window.location.href),
-        new URL("/chat/changelog.txt", window.location.origin),
-      ];
-      let content;
-      let lastError;
-      for (const url of new Set(changelogUrls.map((candidate) => candidate.href))) {
-        try {
-          const response = await fetch(url, { cache: "no-store" });
-          if (!response.ok) { lastError = new Error(`Changelog request failed (${response.status}): ${url}`); continue; }
-          content = (await response.text()).trim();
-          break;
-        } catch (error) { lastError = error; }
-      }
-      if (content === undefined) throw lastError || new Error("Couldn't load the changelog.");
-      if (!content) return;
-      try { if (localStorage.getItem(CHANGELOG_SEEN_KEY) === content) return; } catch (error) { console.error(error); }
-      try { localStorage.setItem(CHANGELOG_SEEN_KEY, content); } catch (error) { console.error(error); }
-      const overlay = document.getElementById("changelog-overlay");
-      const dialog = document.getElementById("changelog-dialog");
-      document.getElementById("changelog-content").textContent = content;
-      overlay.style.display = "flex";
-      dialog.focus();
-      document.getElementById("changelog-dismiss").onclick = () => { overlay.style.display = "none"; };
-    } catch (error) { console.error("Couldn't load the recent-games changelog.", error); }
-  }
-
+  // Push token bridge (kept)
   let pendingFcmToken = null;
   function sendFcmToken(fcmToken) {
     if (!token) { pendingFcmToken = fcmToken; return; }
@@ -306,9 +205,6 @@
   const switchText = document.getElementById("switch-text");
   const switchLink = document.getElementById("switch-link");
   const messagesEl = document.getElementById("messages");
-
-  function showServerRestartPopup() { const overlay = document.getElementById("server-restart-overlay"); if (!overlay) return; overlay.style.display = "flex"; }
-  function hideServerRestartPopup() { const overlay = document.getElementById("server-restart-overlay"); if (!overlay) return; overlay.style.display = "none"; }
 
   const messageInput = document.getElementById("message-input");
   const attachInput = document.getElementById("attach-input");
@@ -335,19 +231,17 @@
       const res = await fetch(`${API_BASE}/api/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }), });
       const data = await res.json();
       if (!res.ok) { authError.textContent = data.error || "Something went wrong."; return; }
-      hideServerRestartPopup();
       token = data.token;
       localStorage.setItem("chat_token", token);
       startChat();
     } catch {
       authError.textContent = "Couldn't reach the server.";
-      showServerRestartPopup();
     }
   };
 
   async function loadHistory() {
     const res = await fetch(`${API_BASE}/api/messages`, { headers: { Authorization: `Bearer ${token}` }, });
-    if (!res.ok) { showServerRestartPopup(); logout(); return; }
+    if (!res.ok) { logout(); return; }
     const msgs = await res.json();
     messagesEl.innerHTML = "";
     messageEls.clear();
@@ -371,9 +265,7 @@
   function formatTime(iso) { if (!iso) return ""; const d = new Date(iso); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
 
   const INSTAGRAM_RE = /https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.]+\/)??(reel|reels|p|tv)\/([A-Za-z0-9_-]+)/i;
-  function renderInstagramEmbed(text) {
-    const m = text.match(INSTAGRAM_RE); if (!m) return null; const kind = m[1].toLowerCase() === "reels" ? "reel" : m[1].toLowerCase(); const src = `https://www.instagram.com/${kind}/${m[2]}/embed/`;
-    const card = document.createElement("div"); card.className = "ig-embed"; card.setAttribute("role", "button"); card.tabIndex = 0; card.innerHTML = `<span class="ig-label">Instagram ${kind === "reel" ? "reel" : "post"}</span><span class="ig-hint">Tap to load</span>`; const load = () => { const frame = document.createElement("iframe"); frame.className = "ig-frame"; frame.src = src; frame.allow = "encrypted-media; autoplay; fullscreen"; frame.allowFullscreen = true; frame.setAttribute("scrolling", "no"); card.replaceWith(frame); }; card.onclick = load; card.onkeydown = (e) => { if (e.key === "Enter") load(); }; return card; }
+  function renderInstagramEmbed(text) { const m = text.match(INSTAGRAM_RE); if (!m) return null; const kind = m[1].toLowerCase() === "reels" ? "reel" : m[1].toLowerCase(); const src = `https://www.instagram.com/${kind}/${m[2]}/embed/`; const card = document.createElement("div"); card.className = "ig-embed"; card.setAttribute("role", "button"); card.tabIndex = 0; card.innerHTML = `<span class="ig-label">Instagram ${kind === "reel" ? "reel" : "post"}</span><span class="ig-hint">Tap to load</span>`; const load = () => { const frame = document.createElement("iframe"); frame.className = "ig-frame"; frame.src = src; frame.allow = "encrypted-media; autoplay; fullscreen"; frame.allowFullscreen = true; frame.setAttribute("scrolling", "no"); card.replaceWith(frame); }; card.onclick = load; card.onkeydown = (e) => { if (e.key === "Enter") load(); }; return card; }
 
   function summarize(m) { if (!m) return "a message"; if (m.type === "image") return "📷 Image"; if (m.type === "video") return "🎥 Video"; return m.content.length > 60 ? m.content.slice(0, 60) + "…" : m.content; }
 
@@ -406,10 +298,10 @@
   function startChat() {
     authCard.style.display = "none"; chatView.style.display = "flex"; loadHistory(); if (pendingFcmToken) { sendFcmToken(pendingFcmToken); pendingFcmToken = null; }
     socket = io(API_BASE, { auth: { token } });
-    socket.on("connect", () => { hideServerRestartPopup(); });
+    socket.on("connect", () => { /* connected */ });
     socket.on("message", (m) => { renderMessage(m); messagesEl.scrollTop = messagesEl.scrollHeight; });
     socket.on("message-preview", ({ id, link_preview }) => { const wrap = messageEls.get(id); if (wrap) wrap.appendChild(renderPreviewCard(link_preview)); });
-    socket.on("connect_error", () => { showServerRestartPopup(); logout(); });
+    socket.on("connect_error", () => { logout(); });
 
     // tidy up on unload
     window.addEventListener('pagehide', () => { if (socket) socket.disconnect(); });
@@ -460,9 +352,6 @@
       alert("Couldn't upload that file.");
     } finally { uploadStatus.style.display = "none"; sendBtn.disabled = false; }
   });
-
-  maybeShowUpdateBanner();
-  maybeShowChangelog();
 
   // If token exists, start chat automatically
   if (token) startChat();
