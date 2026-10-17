@@ -353,8 +353,9 @@
     } finally { uploadStatus.style.display = "none"; sendBtn.disabled = false; }
   });
 
-  // If token exists, start chat automatically
-  if (token) startChat();
+  // socket.io is loaded with defer, so it only exists once the page has finished parsing.
+  // Starting the chat any earlier means io() is undefined and sending silently does nothing.
+  window.addEventListener("DOMContentLoaded", () => { if (token) startChat(); });
 </script>
 </body>
 </html>
