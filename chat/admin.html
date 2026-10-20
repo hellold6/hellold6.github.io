@@ -41,6 +41,8 @@
   .msg-row{display:flex;flex-direction:column;gap:6px;max-width:72%}
   .msg{padding:10px 12px;border-radius:8px;background:var(--surface-raised)}
   .msg.admin{align-self:flex-end;background:linear-gradient(180deg,var(--accent),#e08b4e);color:var(--accent-ink)}
+  .chat-image, .chat-video { max-width:360px; width:100%; height:auto; display:block; border-radius:12px; }
+  .chat-image { cursor:pointer; }
 
   /* Composer */
   #composer{display:none;padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
@@ -218,8 +220,8 @@
     if(m.reply_to && messageData.has(m.reply_to)){ const quoted = messageData.get(m.reply_to); const who = quoted.sender==='admin'?'You':'User'; const q = document.createElement('div'); q.className='quote-block'; q.innerHTML = `<b>${escapeHtml(who)}</b> — ${escapeHtml(summarize(quoted))}`; wrap.appendChild(q); }
     const group = document.createElement('div'); group.className='msg-group';
     const div = document.createElement('div'); div.className = 'msg '+(m.sender==='admin'?'admin':'user');
-    if(m.type==='image'){ const img = document.createElement('img'); img.src=m.content; img.className='chat-image'; img.style.maxWidth='360px'; img.onclick=()=>window.open(m.content,'_blank'); div.appendChild(img); }
-    else if(m.type==='video'){ const v = document.createElement('video'); v.src=m.content; v.controls=true; v.style.maxWidth='360px'; div.appendChild(v); }
+    if(m.type==='image'){ const img = document.createElement('img'); img.src=m.content; img.className='chat-image'; img.loading='lazy'; img.decoding='async'; img.alt='Sent attachment'; img.onclick=()=>window.open(m.content,'_blank'); div.appendChild(img); }
+    else if(m.type==='video'){ const v = document.createElement('video'); v.src=m.content; v.controls=true; v.preload='metadata'; v.playsInline=true; v.className='chat-video'; div.appendChild(v); }
     else div.textContent = m.content;
     group.appendChild(div);
     if(m.id){ const rb = document.createElement('button'); rb.className='btn-ghost'; rb.textContent='↩'; rb.title='Reply'; rb.onclick = ()=> setReplyTarget(m.id); group.appendChild(rb); }
@@ -233,6 +235,28 @@
 
   function summarize(m){ if(!m) return 'a message'; if(m.type==='image') return '📷 Image'; if(m.type==='video') return '🎥 Video'; return m.content.length>80?m.content.slice(0,80)+'…':m.content; }
 
+  const MAX_IMAGE_DIMENSION = 1600;
+  const JPEG_QUALITY = 0.82;
+  function normalizeMimeType(value){ return String(value||'').split(';')[0].trim().toLowerCase(); }
+  function compressImage(file){ return new Promise((resolve, reject)=>{
+    const type = (file.type || '').toLowerCase();
+    if(type === 'image/gif'){ resolve({ blob:file, mimeType:file.type || 'image/gif' }); return; }
+    const img = new Image(); const objectUrl = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if(width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION){ const scale = MAX_IMAGE_DIMENSION / Math.max(width, height); width = Math.round(width * scale); height = Math.round(height * scale); }
+      const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); if(!ctx){ reject(new Error('Canvas is not available')); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob)=>{
+        if(!blob){ reject(new Error('Compression failed')); return; }
+        resolve({ blob, mimeType: 'image/jpeg' });
+      }, 'image/jpeg', JPEG_QUALITY);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(objectUrl); reject(new Error("Couldn't read image")); };
+    img.src = objectUrl;
+  }); }
+
   // Composer send via socket
   document.getElementById('send-btn').onclick = sendMessage;
   document.getElementById('message-input').addEventListener('keydown', (e)=>{ if(e.key==='Enter') sendMessage(); });
@@ -242,10 +266,29 @@
   // Attach flow uses REST + socket as before (reusing existing logic) - kept minimal here
   document.getElementById('attach-btn').onclick = ()=> document.getElementById('attach-input').click();
   document.getElementById('attach-input').addEventListener('change', async ()=>{
-    const file = document.getElementById('attach-input').files[0]; document.getElementById('attach-input').value=''; if(!file || !activeUserId) return; // rely on client compression in chat.html; here we just upload raw
-    const fd = new FormData(); fd.append('file', file); try{ const res = await fetch(`${API_BASE}/api/upload`, { method:'POST', headers: { Authorization: `Bearer ${token}` }, body: fd }); const data = await res.json(); if(!res.ok){ alert(data.error||'Upload failed'); return; } // send via socket
-      socket.emit('message', { userId: activeUserId, content: data.url, type: file.type.startsWith('video/') ? 'video' : 'image' });
-    }catch(e){ alert('Upload failed'); }
+    const file = document.getElementById('attach-input').files[0]; document.getElementById('attach-input').value=''; if(!file || !activeUserId || !socket) return;
+    const fileName = (file.name || '').toLowerCase();
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|3gp|3g2|m4v)$/i.test(fileName);
+    const rawLimit = isVideo ? 150 * 1024 * 1024 : 20 * 1024 * 1024;
+    if(file.size > rawLimit){ alert(`File must be under ${Math.round(rawLimit / 1024 / 1024)}MB.`); return; }
+    const uploadStatus = document.getElementById('upload-status');
+    uploadStatus.style.display = 'block';
+    uploadStatus.textContent = isVideo ? 'Uploading video…' : 'Processing image…';
+    let blob = file; let mimeType = file.type || 'application/octet-stream';
+    try {
+      if(!isVideo){ ({ blob, mimeType } = await compressImage(file)); }
+      const finalLimit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+      if(blob.size > finalLimit){ alert(`File is too large for upload (${Math.round(blob.size / 1024 / 1024)}MB). Try a smaller file.`); uploadStatus.style.display='none'; return; }
+      const fd = new FormData();
+      fd.append('file', blob, file.name || `upload.${isVideo ? 'mp4' : 'jpg'}`);
+      fd.append('mimeType', normalizeMimeType(mimeType || (isVideo ? 'video/mp4' : 'image/jpeg')));
+      const res = await fetch(`${API_BASE}/api/upload`, { method:'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const data = await res.json();
+      if(!res.ok){ alert(data.error || 'Upload failed'); uploadStatus.style.display='none'; return; }
+      socket.emit('message', { userId: activeUserId, content: data.url, type: isVideo ? 'video' : 'image', replyTo: replyingTo?.id || null });
+      replyingTo = null; document.getElementById('reply-preview').style.display = 'none';
+    } catch(e){ alert(e.message || 'Upload failed'); }
+    finally { uploadStatus.style.display = 'none'; }
   });
 
   // Export conversation as JSON
