@@ -6,6 +6,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { Server } = require('socket.io');
 const multer = require('multer');
 const { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } = require('discord.js');
@@ -18,9 +19,11 @@ const {
   ALLOWED_ORIGIN, // e.g. https://hellold6.github.io
   DISCORD_BOT_TOKEN,
   DISCORD_OWNER_ID,
-  SUPABASE_URL, // e.g. https://tcvhviwiadnynzluhmmv.supabase.co
-  SUPABASE_SERVICE_ROLE_KEY,
-  SUPABASE_STORAGE_BUCKET = 'chat-uploads',
+  R2_ACCOUNT_ID,
+  R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY,
+  R2_BUCKET_NAME = 'chat-uploads',
+  R2_PUBLIC_BASE_URL, // public bucket URL or custom domain, e.g. https://media.example.com
   FIREBASE_SERVICE_ACCOUNT_BASE64, // base64 of the Firebase service account JSON (see README)
   PORT = 3000,
 } = process.env;
@@ -30,9 +33,16 @@ if (!DATABASE_URL || !JWT_SECRET || !ADMIN_PASSWORD) {
   process.exit(1);
 }
 
-const imagesEnabled = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+const imagesEnabled = Boolean(
+  R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME && R2_PUBLIC_BASE_URL
+);
+const r2 = imagesEnabled ? new S3Client({
+  region: 'auto',
+  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+}) : null;
 if (!imagesEnabled) {
-  console.log('Image uploads not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing) — skipping.');
+  console.log('Image uploads not configured (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_BASE_URL required) — skipping.');
 }
 
 // ---------- Push notifications (Firebase Cloud Messaging) ----------
@@ -326,22 +336,15 @@ app.post('/api/upload', authMiddleware, upload.single('file'), async (req, res) 
 
   const path = `${folder}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   try {
-    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        'Content-Type': normalizedMimeType,
-        'cache-control': 'max-age=31536000', // file names are unique, so browsers can keep them for a year
-      },
-      body: fileBuffer,
-    });
-    if (!uploadRes.ok) {
-      const text = await uploadRes.text();
-      console.error('Supabase upload failed:', uploadRes.status, text);
-      return res.status(502).json({ error: 'Upload failed' });
-    }
-    const url = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${path}`;
+    await r2.send(new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: path,
+      Body: fileBuffer,
+      ContentType: normalizedMimeType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    }));
+    const publicBaseUrl = R2_PUBLIC_BASE_URL.replace(/\/+$/, '');
+    const url = `${publicBaseUrl}/${path.split('/').map(encodeURIComponent).join('/')}`;
     res.json({ url });
   } catch (err) {
     console.error('Upload error:', err);
