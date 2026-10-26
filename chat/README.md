@@ -5,13 +5,32 @@ Three pieces:
 - **`public/chat.html`** — the visitor-facing page. Goes into your `hellold6.github.io` repo.
 - **`public/admin.html`** — your private dashboard to see and reply to everyone. Also goes into your GitHub Pages repo (or just open it locally — see note below).
 
-## 1. Set up the database (Supabase, free)
+## 1. Set up the database (PostgreSQL)
+
+Keep your existing PostgreSQL database and `DATABASE_URL`. This migration changes media storage only; user accounts and chat messages remain in PostgreSQL.
+
+## 2. Set up Cloudflare R2 for new uploads
+
+1. In Cloudflare Dashboard, open **R2 Object Storage** and create a bucket (for example, `chat-uploads`).
+2. Create an R2 API token with object read/write permission for that bucket. Copy its Access Key ID and Secret Access Key; the secret is only shown once.
+3. In the bucket settings, enable public access only if you intend chat media URLs to be publicly readable. Prefer connecting a dedicated custom domain such as `media.example.com`; do not expose your R2 credentials in the browser.
+4. Set `R2_PUBLIC_BASE_URL` to the public bucket domain or custom media domain, without a trailing slash. It must serve objects at paths such as `/images/<filename>` and `/videos/<filename>`.
+5. Add these environment variables to the backend service (Render):
+   - `R2_ACCOUNT_ID` — Cloudflare account ID
+   - `R2_ACCESS_KEY_ID` — R2 API token access key ID
+   - `R2_SECRET_ACCESS_KEY` — R2 API token secret
+   - `R2_BUCKET_NAME` — bucket name, e.g. `chat-uploads`
+   - `R2_PUBLIC_BASE_URL` — public base URL for reading uploaded objects
+
+New uploads will go to R2. Existing messages and their Supabase media URLs are not changed, and existing objects are not copied or deleted. Keep the old Supabase bucket available while old messages still reference it.
+
+## 3. Set up the database (existing Supabase PostgreSQL)
 
 1. Go to supabase.com → New project.
 2. Once it's created, go to **Project Settings → Database → Connection string → URI**. Copy it — this is your `DATABASE_URL`. Use the "Session pooler" connection string, not "Transaction pooler" (Socket.IO needs a stable connection).
 3. The `users` and `messages` tables are created automatically the first time the server starts — no manual SQL needed.
 
-## 2. Deploy the backend (Render, free)
+## 4. Deploy the backend (Render, free)
 
 1. Push the `chat-backend` folder to its own GitHub repo (private is fine).
 2. On render.com → New → Web Service → connect that repo.
@@ -22,11 +41,12 @@ Three pieces:
    - `ADMIN_PASSWORD` — the password you'll use to log into `admin.html`
    - `ALLOWED_ORIGIN` — `https://hellold6.github.io`
    - `FIREBASE_SERVICE_ACCOUNT_BASE64` — base64-encoded Firebase service account JSON; required for Android push notifications
+   - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL` — required for new media uploads to Cloudflare R2
 5. Deploy. Render gives you a URL like `https://your-app.onrender.com` — that's your backend URL.
 
 Note: Render's free tier spins the server down after 15 minutes of inactivity, so the first message after a quiet period takes ~30 seconds to wake up. Fine for a personal site; upgrade to a paid instance later if that ever bugs you.
 
-## 3. Wire up the frontend
+## 5. Wire up the frontend
 
 1. In both `chat.html` and `admin.html`, replace:
    ```js
