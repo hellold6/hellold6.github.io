@@ -332,6 +332,7 @@ app.post('/api/upload', authMiddleware, upload.single('file'), async (req, res) 
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         apikey: SUPABASE_SERVICE_ROLE_KEY,
         'Content-Type': normalizedMimeType,
+        'cache-control': 'max-age=31536000', // file names are unique, so browsers can keep them for a year
       },
       body: fileBuffer,
     });

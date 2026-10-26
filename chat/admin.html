@@ -221,7 +221,7 @@
     const group = document.createElement('div'); group.className='msg-group';
     const div = document.createElement('div'); div.className = 'msg '+(m.sender==='admin'?'admin':'user');
     if(m.type==='image'){ const img = document.createElement('img'); img.src=m.content; img.className='chat-image'; img.loading='lazy'; img.decoding='async'; img.alt='Sent attachment'; img.onclick=()=>window.open(m.content,'_blank'); div.appendChild(img); }
-    else if(m.type==='video'){ const v = document.createElement('video'); v.src=m.content; v.controls=true; v.preload='metadata'; v.playsInline=true; v.className='chat-video'; div.appendChild(v); }
+    else if(m.type==='video'){ const v = document.createElement('video'); v.src=m.content; v.controls=true; v.preload='none'; v.playsInline=true; v.className='chat-video'; div.appendChild(v); }
     else div.textContent = m.content;
     group.appendChild(div);
     if(m.id){ const rb = document.createElement('button'); rb.className='btn-ghost'; rb.textContent='↩'; rb.title='Reply'; rb.onclick = ()=> setReplyTarget(m.id); group.appendChild(rb); }
