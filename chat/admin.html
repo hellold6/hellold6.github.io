@@ -102,6 +102,7 @@
   .dm-thread-head h2 { margin: 0; }
   .dm-log { max-height: min(52dvh, 520px); overflow: auto; display: flex; flex-direction: column; gap: 0.7rem; }
   .dm-row { max-width: 85%; display: flex; flex-direction: column; gap: 0.2rem; }
+  #dm-older { align-self: center; margin-bottom: 0.2rem; }
   .dm-row.user { align-self: flex-start; }
   .dm-row.admin { align-self: flex-end; align-items: flex-end; }
   .dm-bubble { border: 1px solid var(--border); padding: 0.55rem 0.7rem; white-space: pre-wrap; word-break: break-word; }
@@ -274,18 +275,16 @@
     document.getElementById('login-screen').hidden = true;
     document.getElementById('dashboard').hidden = false;
     await refresh();
+    if (socket) socket.disconnect();
     socket = io(API_BASE, { auth: { token } });
     socket.on('connect', () => socket.emit('community-admin-watch'));
     socket.on('community-message', refresh);
     socket.on('community-deleted', refresh);
     socket.on('connect_error', logout);
-    socket.on('new-message', ({ userId, username }) => {
-      loadDmConversations();
-      if (Number(userId) === Number(activeDmUserId)) openDmThread(userId, username);
-    });
+    socket.on('new-message', (payload) => noteIncomingDm(payload));
     socket.on('message-sent', (m) => {
       if (Number(m.userId) !== Number(activeDmUserId)) return;
-      renderAdminDm({ id: m.id, sender: 'admin', type: m.type, content: m.content, reply_to: m.reply_to, created_at: m.created_at });
+      paintDmRows([{ id: m.id, sender: 'admin', type: m.type, content: m.content, reply_to: m.reply_to, created_at: m.created_at }], { stick: true });
     });
     socket.on('message-preview', ({ id, link_preview }) => {
       const row = adminDmEls.get(id);
@@ -440,9 +439,6 @@
   const adminDmEls = new Map();
   const adminDmData = new Map();
 
-  function dmEscape(value) {
-    return String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
   function dmSummarize(m) {
     if (!m) return 'a message';
     if (m.type === 'image') return 'Image';
@@ -465,7 +461,27 @@
     link.href = preview.url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.innerHTML = `${preview.image ? `<img src="${dmEscape(preview.image)}" alt="">` : ''}<div class="preview-body"><div>${dmEscape(preview.siteName || '')}</div><div>${dmEscape(preview.title || preview.url)}</div></div>`;
+    if (preview.image) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.decoding = 'async';
+      img.dataset.src = preview.image;
+      observeLazy(img);
+      link.appendChild(img);
+    }
+    const body = document.createElement('div');
+    body.className = 'preview-body';
+    const site = document.createElement('div');
+    site.textContent = preview.siteName || '';
+    const title = document.createElement('div');
+    title.textContent = preview.title || preview.url || '';
+    body.append(site, title);
+    if (preview.description) {
+      const desc = document.createElement('div');
+      desc.textContent = preview.description;
+      body.appendChild(desc);
+    }
+    link.appendChild(body);
     return link;
   }
   function showAdminView(name) {
@@ -505,6 +521,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.className = `conv${Number(c.id) === Number(activeDmUserId) ? ' active' : ''}`;
+      button.dataset.userId = String(c.id);
       const text = document.createElement('span');
       const name = document.createElement('div');
       name.className = 'name';
@@ -526,13 +543,56 @@
       list.appendChild(button);
     });
   }
-  function renderAdminDm(m) {
-    if (m.id != null && adminDmIds.has(m.id)) return;
+  const DM_PAGE = 50;
+  let dmLoadGen = 0;
+  let dmLegacy = null;
+  let dmShown = 0;
+  let dmHasMore = false;
+  let dmOldestId = null;
+  let dmPaging = false;
+  let dmLazy = null;
+
+  function observeLazy(img) {
+    if (!dmLazy) {
+      dmLazy = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const node = entry.target;
+          if (node.dataset.src) {
+            node.src = node.dataset.src;
+            node.removeAttribute('data-src');
+          }
+          dmLazy.unobserve(node);
+        }
+      }, { root: document.getElementById('dm-log'), rootMargin: '240px' });
+    }
+    dmLazy.observe(img);
+  }
+  function markActiveConversation(userId) {
+    document.querySelectorAll('#dm-conv-list .conv').forEach((el) => {
+      el.classList.toggle('active', Number(el.dataset.userId) === Number(userId));
+    });
+  }
+  function syncOlderButton() {
+    let button = document.getElementById('dm-older');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.id = 'dm-older';
+      button.className = 'btn';
+      button.textContent = 'Load earlier';
+      button.onclick = () => loadOlderDms();
+    }
+    button.hidden = !dmHasMore;
+    const log = document.getElementById('dm-log');
+    if (button.parentNode !== log) log.prepend(button);
+  }
+  function buildAdminDmRow(m) {
+    if (m.id != null && adminDmIds.has(m.id)) return null;
     if (m.id != null) {
       adminDmIds.add(m.id);
       adminDmData.set(m.id, m);
     }
-    const log = document.getElementById('dm-log');
     const row = document.createElement('div');
     row.className = `dm-row ${m.sender === 'admin' ? 'admin' : 'user'}`;
     if (m.reply_to && adminDmData.has(m.reply_to)) {
@@ -546,8 +606,10 @@
     bubble.className = 'dm-bubble';
     if (m.type === 'image') {
       const img = document.createElement('img');
-      img.src = m.content;
       img.alt = 'Sent image';
+      img.decoding = 'async';
+      img.dataset.src = m.content;
+      observeLazy(img);
       img.onclick = () => window.open(m.content, '_blank');
       bubble.appendChild(img);
     } else if (m.type === 'video') {
@@ -557,11 +619,14 @@
       video.playsInline = true;
       video.preload = 'none';
       bubble.appendChild(video);
-    } else bubble.textContent = m.content;
+    } else bubble.textContent = m.content || '';
     row.appendChild(bubble);
     const meta = document.createElement('div');
     meta.className = 'dm-meta';
-    meta.textContent = `${m.sender === 'admin' ? 'You' : 'Them'} ${m.created_at ? new Date(m.created_at).toLocaleString('en-AU', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : ''}`;
+    const when = m.created_at
+      ? new Date(m.created_at).toLocaleString('en-AU', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })
+      : '';
+    meta.textContent = `${m.sender === 'admin' ? 'You' : 'Them'} ${when}`;
     if (m.id) {
       const reply = document.createElement('button');
       reply.type = 'button';
@@ -577,25 +642,145 @@
     }
     row.appendChild(meta);
     if (m.link_preview) row.appendChild(adminPreviewCard(m.link_preview));
-    log.appendChild(row);
     if (m.id != null) adminDmEls.set(m.id, row);
-    log.scrollTop = log.scrollHeight;
+    return row;
+  }
+  function paintDmRows(messages, { prepend = false, stick = false } = {}) {
+    const log = document.getElementById('dm-log');
+    const frag = document.createDocumentFragment();
+    for (const message of messages) {
+      const row = buildAdminDmRow(message);
+      if (row) frag.appendChild(row);
+    }
+    if (!frag.childNodes.length) return;
+    if (prepend) {
+      const prevHeight = log.scrollHeight;
+      const prevTop = log.scrollTop;
+      const anchor = document.getElementById('dm-older');
+      if (anchor && anchor.parentNode === log) anchor.after(frag);
+      else log.prepend(frag);
+      log.scrollTop = prevTop + (log.scrollHeight - prevHeight);
+      return;
+    }
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+    log.appendChild(frag);
+    if (stick || nearBottom) {
+      const pin = () => { log.scrollTop = log.scrollHeight; };
+      pin();
+      requestAnimationFrame(pin);
+    }
+  }
+  function applyDmPage(body) {
+    let page;
+    if (Array.isArray(body)) {
+      dmLegacy = body;
+      dmShown = Math.min(DM_PAGE, body.length);
+      dmHasMore = body.length > dmShown;
+      page = body.slice(body.length - dmShown);
+    } else {
+      dmLegacy = null;
+      dmShown = 0;
+      page = body.messages || [];
+      dmHasMore = Boolean(body.hasMore);
+    }
+    dmOldestId = page.length ? page[0].id : null;
+    paintDmRows(page, { stick: true });
+    syncOlderButton();
+    refreshDmLabel();
+  }
+  function refreshDmLabel() {
+    const shown = document.querySelectorAll('#dm-log .dm-row').length;
+    document.getElementById('dm-thread-sub').textContent = dmHasMore
+      ? `Showing ${shown} messages. Scroll up for earlier ones.`
+      : `${shown} messages in this private thread`;
   }
   async function openDmThread(userId, username) {
+    const gen = ++dmLoadGen;
     activeDmUserId = userId;
+    dmReplyingTo = null;
+    document.getElementById('dm-reply').hidden = true;
     document.getElementById('dm-thread-name').textContent = username || 'Conversation';
     document.getElementById('dm-thread-sub').textContent = 'Loading…';
-    renderDmConversations(document.getElementById('dm-search').value.trim().toLowerCase());
-    const res = await fetch(`${API_BASE}/api/admin/messages/${userId}`, { headers: headers() });
-    if (res.status === 401) return logout();
-    if (!res.ok) return;
-    const msgs = await res.json();
+    markActiveConversation(userId);
     adminDmIds.clear();
     adminDmEls.clear();
     adminDmData.clear();
+    dmLegacy = null;
+    dmShown = 0;
+    dmHasMore = false;
+    dmOldestId = null;
     document.getElementById('dm-log').replaceChildren();
-    msgs.forEach(renderAdminDm);
-    document.getElementById('dm-thread-sub').textContent = `${msgs.length} messages in this private thread`;
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/api/admin/messages/${userId}?limit=${DM_PAGE}`, { headers: headers() });
+    } catch {
+      return;
+    }
+    if (gen !== dmLoadGen) return;
+    if (res.status === 401) return logout();
+    if (!res.ok) {
+      document.getElementById('dm-thread-sub').textContent = 'Could not load that thread.';
+      return;
+    }
+    applyDmPage(await res.json());
+  }
+  async function loadOlderDms() {
+    if (dmPaging || !dmHasMore || activeDmUserId == null) return;
+    dmPaging = true;
+    const gen = dmLoadGen;
+    try {
+      if (dmLegacy) {
+        const end = dmLegacy.length - dmShown;
+        const start = Math.max(0, end - DM_PAGE);
+        const slice = dmLegacy.slice(start, end);
+        dmShown += slice.length;
+        dmHasMore = start > 0;
+        if (slice.length) dmOldestId = slice[0].id;
+        if (gen !== dmLoadGen) return;
+        paintDmRows(slice, { prepend: true });
+        syncOlderButton();
+        refreshDmLabel();
+        return;
+      }
+      const res = await fetch(`${API_BASE}/api/admin/messages/${activeDmUserId}?limit=${DM_PAGE}&before=${dmOldestId}`, { headers: headers() });
+      if (gen !== dmLoadGen) return;
+      if (!res.ok) return;
+      const body = await res.json();
+      const page = Array.isArray(body) ? [] : (body.messages || []);
+      dmHasMore = !Array.isArray(body) && Boolean(body.hasMore);
+      if (page.length) dmOldestId = page[0].id;
+      paintDmRows(page, { prepend: true });
+      syncOlderButton();
+      refreshDmLabel();
+    } finally {
+      dmPaging = false;
+    }
+  }
+  function noteIncomingDm(payload) {
+    if (!payload) return;
+    const userId = payload.userId;
+    const conv = dmConversations.find((c) => Number(c.id) === Number(userId));
+    if (conv) {
+      conv.last_message = payload.content;
+      conv.last_type = payload.type;
+      conv.last_at = payload.created_at;
+    }
+    const preview = document.querySelector(`#dm-conv-list .conv[data-user-id="${userId}"] .preview`);
+    if (preview) {
+      preview.textContent = payload.type === 'image' ? 'Image' : payload.type === 'video' ? 'Video' : (payload.content || 'No messages yet');
+    } else if (userId) {
+      loadDmConversations();
+    }
+    if (Number(userId) !== Number(activeDmUserId) || payload.id == null) return;
+    paintDmRows([{
+      id: payload.id,
+      sender: payload.sender || 'user',
+      type: payload.type,
+      content: payload.content,
+      reply_to: payload.reply_to,
+      created_at: payload.created_at,
+      link_preview: payload.link_preview,
+    }], { stick: true });
   }
   async function compressAdminImage(file) {
     if ((file.type || '').toLowerCase() === 'image/gif') return { blob: file, mimeType: file.type || 'image/gif' };
@@ -624,6 +809,11 @@
   document.getElementById('show-room-admin').onclick = () => showAdminView('room');
   document.getElementById('show-dm-admin').onclick = () => showAdminView('dm');
   document.getElementById('dm-refresh').onclick = () => loadDmConversations();
+  document.getElementById('dm-log').addEventListener('scroll', () => {
+    const log = document.getElementById('dm-log');
+    if (log.scrollHeight <= log.clientHeight + 8) return;
+    if (log.scrollTop < 48) loadOlderDms();
+  });
   document.getElementById('dm-search').addEventListener('input', (event) => {
     renderDmConversations(event.target.value.trim().toLowerCase());
   });
@@ -641,7 +831,9 @@
     if (!activeDmUserId) return;
     const res = await fetch(`${API_BASE}/api/admin/messages/${activeDmUserId}`, { headers: headers() });
     if (!res.ok) return;
-    const blob = new Blob([JSON.stringify(await res.json(), null, 2)], { type: 'application/json' });
+    const body = await res.json();
+    const exported = Array.isArray(body) ? body : (body.messages || []);
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
