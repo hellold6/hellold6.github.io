@@ -40,6 +40,12 @@ function isLocalDatabase(connectionString) {
   }
 }
 
+function demoSeedAllowed() {
+  // Illustrative accounts only on a local database, and never when deployed
+  // with NODE_ENV=production. A remote database is never seeded.
+  return process.env.NODE_ENV !== 'production' && isLocalDatabase(process.env.DATABASE_URL);
+}
+
 function clip(value, max) {
   if (typeof value !== 'string') return null;
   return value.trim().slice(0, max);
@@ -82,15 +88,10 @@ function tokenBucket({ capacity, refillPerSec }) {
   };
 }
 
-async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireAdmin }) {
-  if (!isLocalDatabase(process.env.DATABASE_URL)) {
-    console.log('CHAT_NEXT=1 but DATABASE_URL is not local — community schema was not applied.');
-    return;
-  }
-
+async function setupCommunity({ app, io, pool, authMiddleware, requireAdmin }) {
   const sql = fs.readFileSync(path.join(__dirname, 'schema-next.sql'), 'utf8');
   await pool.query(sql);
-  await seedIllustrative(pool);
+  if (demoSeedAllowed()) await seedIllustrative(pool);
 
   const typingUntil = new Map();
   const allowMessage = tokenBucket({ capacity: 5, refillPerSec: 0.5 });
@@ -307,11 +308,13 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     next();
   }
 
-  app.get('/chat/chat-next.html', (_req, res) => sendPage(res, 'chat-next.html'));
-  app.get('/chat/admin-next.html', (_req, res) => sendPage(res, 'admin-next.html'));
+  app.get('/chat/chat.html', (_req, res) => sendPage(res, 'chat.html'));
+  app.get('/chat/admin.html', (_req, res) => sendPage(res, 'admin.html'));
+  app.get('/chat/chat-next.html', (_req, res) => res.redirect(302, '/chat/chat.html'));
+  app.get('/chat/admin-next.html', (_req, res) => res.redirect(302, '/chat/admin.html'));
 
   app.get('/api/community/health', (_req, res) => {
-    res.json({ ok: true, prototype: true });
+    res.json({ ok: true, demo: demoSeedAllowed() });
   });
 
   app.get('/api/community/messages', authMiddleware, requireUser, asyncHandler(async (req, res) => {
@@ -638,10 +641,11 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     });
   });
 
-  console.log('Community prototype on /chat/chat-next.html and /chat/admin-next.html');
+  console.log('Community chat on /chat/chat.html and /chat/admin.html');
 }
 
 async function seedIllustrative(pool) {
+  if (!demoSeedAllowed()) return;
   const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const ids = {};
   for (const demo of DEMOS) {
@@ -686,4 +690,4 @@ async function seedIllustrative(pool) {
   );
 }
 
-module.exports = { setupCommunityPrototype, isLocalDatabase };
+module.exports = { setupCommunity, demoSeedAllowed };

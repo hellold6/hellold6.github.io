@@ -107,9 +107,19 @@ async function sendAdminPushNotification(username, payload) {
   }
 }
 
+function poolSsl(connectionString) {
+  try {
+    const host = new URL(String(connectionString).replace(/^postgres(ql)?:/i, 'http:')).hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
+  } catch {
+    // Unparsed or remote URLs keep the managed-Postgres SSL default.
+  }
+  return { rejectUnauthorized: false };
+}
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // needed for Supabase/Render-style managed Postgres
+  ssl: poolSsl(DATABASE_URL), // SSL for Supabase/Render; plain for localhost
 });
 
 async function migrate() {
@@ -622,14 +632,8 @@ async function notifyDiscordNewMessage(userId, username, payload) {
 
 migrate()
   .then(async () => {
-    // Prototype room (reactions, replies, typing, profiles, admin tools).
-    // Stays off unless CHAT_NEXT=1. Its schema is applied only for a localhost
-    // database, and it is not part of migrate() above, so production startup
-    // does not create or alter those tables.
-    if (process.env.CHAT_NEXT === '1') {
-      const { setupCommunityPrototype } = require('./community-next');
-      await setupCommunityPrototype({ app, io, pool, authMiddleware, requireAdmin });
-    }
+    const { setupCommunity } = require('./community-next');
+    await setupCommunity({ app, io, pool, authMiddleware, requireAdmin });
     server.listen(PORT, () => console.log(`Chat backend listening on port ${PORT}`));
   })
   .catch((err) => {
