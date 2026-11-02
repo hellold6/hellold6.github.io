@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>community · hellold</title>
+<title>Chat</title>
+<meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
@@ -84,6 +85,8 @@
   .switch { margin-top: 0.9rem; color: var(--muted); text-align: center; }
   .text-btn { background: none; border: none; color: var(--muted); padding: 0; font-size: 12px; }
   .text-btn:hover { color: var(--accent); }
+  .sound-toggle { border: 1px solid var(--border); padding: 0.35rem 0.55rem; color: var(--text); }
+  .sound-toggle[aria-pressed="false"] { color: var(--muted); }
   .demo { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
   .demo-actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
   .demo-actions .btn { flex: 1; }
@@ -228,6 +231,7 @@
   .swatch[data-color="muted"] { --swatch: var(--muted); }
   .swatch.selected { border-color: var(--text); }
   .saved { color: var(--accent); }
+  .empty-note { color: var(--muted); padding: 1.5rem 0; }
 
   @media (max-width: 700px) {
     .hover-bar { position: static; opacity: 1; pointer-events: auto; grid-column: 2; margin-top: 0.3rem; width: max-content; }
@@ -242,10 +246,8 @@
 <body>
   <div id="auth-screen" class="auth-screen">
     <div class="card" id="auth-card">
-      <div class="logo"><span>//</span> hellold</div>
-      <p class="hero-tag">community</p>
       <h1>Chat</h1>
-      <p class="lede">A room for friends. Sign in, or step in with an illustrative account.</p>
+      <p class="lede">Sign in, or step in with an illustrative account.</p>
       <p class="error" id="auth-error"></p>
       <form id="auth-form">
         <label class="field"><span>Username</span><input id="username" autocomplete="username" maxlength="40"></label>
@@ -267,11 +269,11 @@
     <header class="topbar">
       <div class="topbar-inner">
         <div class="brand-lockup">
-          <div class="logo"><span>//</span> hellold</div>
-          <div class="room-tag hero-tag">community</div>
+          <div class="logo">Chat</div>
         </div>
         <div class="top-meta">
           <div class="status"><span class="dot"></span><span id="online-count">0 online</span></div>
+          <button type="button" class="text-btn sound-toggle" id="sound-toggle" aria-pressed="true">sound on</button>
           <button type="button" class="you-btn" id="you-btn">
             <span id="you-avatar" class="avatar tiny"></span>
             <span id="you-name">you</span>
@@ -323,6 +325,10 @@
     ? location.origin
     : (location.protocol === 'file:' ? 'http://127.0.0.1:3000' : 'https://hellold6-github-io.onrender.com');
   const TOKEN_KEY = 'chat_next_token';
+  const SOUND_KEY = 'chat_next_sound';
+  let soundOn = localStorage.getItem(SOUND_KEY) !== 'off';
+  let audioCtx = null;
+  let heardGesture = false;
 
   let mode = 'login';
   let token = sessionStorage.getItem(TOKEN_KEY);
@@ -431,6 +437,37 @@
     else composerNote.textContent = '';
   }
 
+  function markGesture() {
+    heardGesture = true;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    if (!audioCtx) audioCtx = new AudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playIncoming() {
+    if (!soundOn || !heardGesture || !audioCtx || audioCtx.state !== 'running') return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.03, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.34);
+  }
+
+  function paintSound() {
+    const button = document.getElementById('sound-toggle');
+    button.textContent = soundOn ? 'sound on' : 'sound off';
+    button.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+  }
+
   function avatarButton(person) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -446,6 +483,13 @@
     const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 140;
     const previous = log.scrollTop;
     log.replaceChildren();
+    if (me?.banned_at) {
+      const note = document.createElement('p');
+      note.className = 'empty-note';
+      note.textContent = "You can't read this room.";
+      log.appendChild(note);
+      return;
+    }
     messages.forEach((message, index) => {
       const prev = messages[index - 1];
       const grouped = Boolean(prev)
@@ -664,13 +708,28 @@
     profileLayer.hidden = true;
   }
 
+  async function loadHistory() {
+    const history = await fetch(`${API_BASE}/api/community/messages`, { headers: authHeaders() });
+    if (history.status === 403) {
+      me.banned_at = me.banned_at || new Date().toISOString();
+      messages = [];
+      return;
+    }
+    if (!history.ok) throw new Error('history');
+    messages = await history.json();
+  }
+
   async function startChat() {
     const meRes = await fetch(`${API_BASE}/api/community/me`, { headers: authHeaders() });
     if (!meRes.ok) { logout(); return; }
     me = await meRes.json();
-    const history = await fetch(`${API_BASE}/api/community/messages`, { headers: authHeaders() });
-    if (!history.ok) { logout(); return; }
-    messages = await history.json();
+    try {
+      if (me.banned_at) messages = [];
+      else await loadHistory();
+    } catch {
+      logout();
+      return;
+    }
     authScreen.hidden = true;
     app.hidden = false;
     paintYou();
@@ -685,8 +744,11 @@
     });
     socket.on('community-typers', ({ typers }) => renderTyping(typers));
     socket.on('community-message', (message) => {
+      if (me.banned_at) return;
+      const fromOther = Number(message.user_id) !== Number(me.id);
       if (!messages.some((item) => item.id === message.id)) messages.push(message);
       renderMessages();
+      if (fromOther && (document.hidden || !document.hasFocus())) playIncoming();
     });
     socket.on('community-reactions', ({ messageId, reactions }) => {
       const message = messages.find((item) => item.id === messageId);
@@ -701,10 +763,21 @@
       });
       renderMessages();
     });
-    socket.on('community-moderation', (state) => {
+    socket.on('community-moderation', async (state) => {
+      const wasBanned = Boolean(me.banned_at);
       me.banned_at = state.banned ? (me.banned_at || new Date().toISOString()) : null;
       me.muted_until = state.muted_until;
       renderModeration();
+      if (state.banned) {
+        messages = [];
+        renderMessages();
+        return;
+      }
+      if (wasBanned) {
+        socket.emit('community-join');
+        try { await loadHistory(); } catch { messages = []; }
+        renderMessages();
+      }
     });
     socket.on('community-error', ({ error }) => { composerNote.textContent = error || ''; });
     socket.on('connect_error', () => logout());
@@ -730,13 +803,23 @@
   };
 
   messageInput.addEventListener('input', () => {
-    if (!socket) return;
+    if (!socket || messageInput.disabled) return;
     socket.emit('community-typing', { typing: Boolean(messageInput.value.trim()) });
   });
   setInterval(() => {
-    if (!socket || document.activeElement !== messageInput || !messageInput.value.trim()) return;
+    if (!socket || messageInput.disabled || document.activeElement !== messageInput || !messageInput.value.trim()) return;
     socket.emit('community-typing', { typing: true });
   }, 1500);
+
+  paintSound();
+  document.getElementById('sound-toggle').onclick = () => {
+    markGesture();
+    soundOn = !soundOn;
+    localStorage.setItem(SOUND_KEY, soundOn ? 'on' : 'off');
+    paintSound();
+  };
+  document.addEventListener('pointerdown', markGesture);
+  document.addEventListener('keydown', markGesture);
 
   document.getElementById('you-btn').onclick = () => { if (me) openProfile(me.id); };
   document.getElementById('logout-btn').onclick = logout;

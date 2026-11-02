@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /sociogram_v3.html
+Disallow: /chat/chat-next.html
+Disallow: /chat/admin-next.html
 Sitemap: https://hellold6.github.io/sitemap.xml

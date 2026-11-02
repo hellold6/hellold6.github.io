@@ -55,6 +55,33 @@ function sendPage(res, name) {
   res.sendFile(path.join(__dirname, name));
 }
 
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch((err) => {
+      console.error(err);
+      if (!res.headersSent) res.status(500).json({ error: 'Server error' });
+    });
+  };
+}
+
+function tokenBucket({ capacity, refillPerSec }) {
+  const buckets = new Map();
+  return function allow(userId) {
+    const now = Date.now();
+    let bucket = buckets.get(userId);
+    if (!bucket) {
+      bucket = { tokens: capacity, updated: now };
+      buckets.set(userId, bucket);
+    }
+    const elapsed = (now - bucket.updated) / 1000;
+    bucket.tokens = Math.min(capacity, bucket.tokens + elapsed * refillPerSec);
+    bucket.updated = now;
+    if (bucket.tokens < 1) return false;
+    bucket.tokens -= 1;
+    return true;
+  };
+}
+
 async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireAdmin }) {
   if (!isLocalDatabase(process.env.DATABASE_URL)) {
     console.log('CHAT_NEXT=1 but DATABASE_URL is not local — community schema was not applied.');
@@ -66,6 +93,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
   await seedIllustrative(pool);
 
   const typingUntil = new Map();
+  const allowMessage = tokenBucket({ capacity: 5, refillPerSec: 0.5 });
+  const allowReaction = tokenBucket({ capacity: 10, refillPerSec: 2 });
+  const allowTyping = tokenBucket({ capacity: 8, refillPerSec: 4 });
 
   function socketsForUser(userId) {
     const matches = [];
@@ -143,7 +173,28 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     };
     for (const socket of socketsForUser(userId)) {
       socket.emit('community-moderation', payload);
+      if (payload.banned) socket.leave('community');
     }
+  }
+
+  async function reactionsFor(messageId) {
+    const result = await pool.query(
+      `SELECT emoji, user_id
+       FROM community_reactions
+       WHERE message_id = $1
+       ORDER BY created_at ASC`,
+      [messageId]
+    );
+    const buckets = new Map();
+    for (const row of result.rows) {
+      if (!buckets.has(row.emoji)) buckets.set(row.emoji, []);
+      buckets.get(row.emoji).push(row.user_id);
+    }
+    return [...buckets.entries()].map(([emoji, userIds]) => ({
+      emoji,
+      count: userIds.length,
+      userIds,
+    }));
   }
 
   async function attachReactions(rows) {
@@ -213,9 +264,10 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     const result = await pool.query(
       `${messageSelect}
        WHERE m.deleted_at IS NULL
-       ORDER BY m.created_at ASC
+       ORDER BY m.created_at DESC
        LIMIT 300`
     );
+    result.rows.reverse();
     return attachReactions(result.rows);
   }
 
@@ -262,17 +314,19 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     res.json({ ok: true, prototype: true });
   });
 
-  app.get('/api/community/messages', authMiddleware, requireUser, async (_req, res) => {
+  app.get('/api/community/messages', authMiddleware, requireUser, asyncHandler(async (req, res) => {
+    const mod = await getMod(req.auth.id);
+    if (mod.banned_at) return res.status(403).json({ error: 'You are banned from the room.' });
     res.json(await loadMessages());
-  });
+  }));
 
-  app.get('/api/community/me', authMiddleware, requireUser, async (req, res) => {
+  app.get('/api/community/me', authMiddleware, requireUser, asyncHandler(async (req, res) => {
     const profile = await loadProfile(req.auth.id);
     if (!profile) return res.status(404).json({ error: 'User not found' });
     res.json({ ...profile, self: true });
-  });
+  }));
 
-  app.get('/api/community/profile/:userId', authMiddleware, requireUser, async (req, res) => {
+  app.get('/api/community/profile/:userId', authMiddleware, requireUser, asyncHandler(async (req, res) => {
     const userId = Number(req.params.userId);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Bad user id' });
     const profile = await loadProfile(userId);
@@ -284,9 +338,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
       delete body.banned_at;
     }
     res.json(body);
-  });
+  }));
 
-  app.patch('/api/community/me', authMiddleware, requireUser, async (req, res) => {
+  app.patch('/api/community/me', authMiddleware, requireUser, asyncHandler(async (req, res) => {
     const displayName = clip(req.body?.displayName, 40);
     const pronouns = clip(req.body?.pronouns, 40);
     const bio = clip(req.body?.bio, 280);
@@ -305,9 +359,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     for (const socket of socketsForUser(req.auth.id)) socket.communityName = name;
     const profile = await loadProfile(req.auth.id);
     res.json({ ...profile, self: true });
-  });
+  }));
 
-  app.get('/api/community/admin/stats', authMiddleware, requireAdmin, async (_req, res) => {
+  app.get('/api/community/admin/stats', authMiddleware, requireAdmin, asyncHandler(async (_req, res) => {
     const result = await pool.query(`
       SELECT
         (SELECT COUNT(*)::int FROM users) AS members,
@@ -317,9 +371,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
         (SELECT COUNT(*)::int FROM community_profiles WHERE banned_at IS NOT NULL) AS banned
     `);
     res.json(result.rows[0]);
-  });
+  }));
 
-  app.get('/api/community/admin/users', authMiddleware, requireAdmin, async (req, res) => {
+  app.get('/api/community/admin/users', authMiddleware, requireAdmin, asyncHandler(async (req, res) => {
     const pattern = searchPattern(req.query.q || '');
     const result = await pool.query(
       `SELECT u.id, u.username, u.created_at,
@@ -343,9 +397,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
       muted_until: row.muted_until,
       banned_at: row.banned_at,
     })));
-  });
+  }));
 
-  app.get('/api/community/admin/messages', authMiddleware, requireAdmin, async (_req, res) => {
+  app.get('/api/community/admin/messages', authMiddleware, requireAdmin, asyncHandler(async (_req, res) => {
     const result = await pool.query(
       `SELECT m.id, m.content, m.created_at, u.username, COALESCE(p.display_name, u.username) AS display_name
        FROM community_messages m
@@ -356,7 +410,7 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
        LIMIT 40`
     );
     res.json(result.rows);
-  });
+  }));
 
   async function setModeration(userId, fields) {
     const existing = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
@@ -372,7 +426,7 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     return getMod(userId);
   }
 
-  app.post('/api/community/admin/users/:id/ban', authMiddleware, requireAdmin, async (req, res) => {
+  app.post('/api/community/admin/users/:id/ban', authMiddleware, requireAdmin, asyncHandler(async (req, res) => {
     const userId = Number(req.params.id);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Bad user id' });
     const current = await getMod(userId);
@@ -382,9 +436,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     pushModeration(userId, mod);
     broadcastTyping();
     res.json({ ok: true });
-  });
+  }));
 
-  app.post('/api/community/admin/users/:id/unban', authMiddleware, requireAdmin, async (req, res) => {
+  app.post('/api/community/admin/users/:id/unban', authMiddleware, requireAdmin, asyncHandler(async (req, res) => {
     const userId = Number(req.params.id);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Bad user id' });
     const current = await getMod(userId);
@@ -392,9 +446,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     if (!mod) return res.status(404).json({ error: 'User not found' });
     pushModeration(userId, mod);
     res.json({ ok: true });
-  });
+  }));
 
-  app.post('/api/community/admin/users/:id/mute', authMiddleware, requireAdmin, async (req, res) => {
+  app.post('/api/community/admin/users/:id/mute', authMiddleware, requireAdmin, asyncHandler(async (req, res) => {
     const userId = Number(req.params.id);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Bad user id' });
     const minutes = Math.min(Math.max(Number(req.body?.minutes) || 10, 1), 1440);
@@ -406,9 +460,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     pushModeration(userId, mod);
     broadcastTyping();
     res.json({ ok: true, muted_until: mod.muted_until });
-  });
+  }));
 
-  app.post('/api/community/admin/users/:id/unmute', authMiddleware, requireAdmin, async (req, res) => {
+  app.post('/api/community/admin/users/:id/unmute', authMiddleware, requireAdmin, asyncHandler(async (req, res) => {
     const userId = Number(req.params.id);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Bad user id' });
     const current = await getMod(userId);
@@ -416,9 +470,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     if (!mod) return res.status(404).json({ error: 'User not found' });
     pushModeration(userId, mod);
     res.json({ ok: true });
-  });
+  }));
 
-  app.delete('/api/community/admin/messages/:id', authMiddleware, requireAdmin, async (req, res) => {
+  app.delete('/api/community/admin/messages/:id', authMiddleware, requireAdmin, asyncHandler(async (req, res) => {
     const messageId = Number(req.params.id);
     if (!Number.isInteger(messageId)) return res.status(400).json({ error: 'Bad message id' });
     const result = await pool.query(
@@ -431,24 +485,36 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
     if (!result.rows[0]) return res.status(404).json({ error: 'Message not found' });
     io.to('community').emit('community-deleted', { id: messageId });
     res.json({ ok: true });
-  });
+  }));
 
   io.on('connection', (socket) => {
     socket.on('community-join', async () => {
-      if (socket.auth?.role !== 'user') return;
-      await pool.query(
-        'INSERT INTO community_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
-        [socket.auth.id]
-      );
-      socket.join('community');
-      socket.communityName = await displayNameFor(socket.auth.id);
-      const mod = await getMod(socket.auth.id);
-      socket.emit('community-moderation', {
-        banned: Boolean(mod.banned_at),
-        muted_until: mod.muted_until,
-      });
-      emitPresence();
-      broadcastTyping();
+      try {
+        if (socket.auth?.role !== 'user') return;
+        const mod = await getMod(socket.auth.id);
+        socket.emit('community-moderation', {
+          banned: Boolean(mod.banned_at),
+          muted_until: mod.muted_until,
+        });
+        if (mod.banned_at) {
+          socket.leave('community');
+          typingUntil.delete(Number(socket.auth.id));
+          socket.emit('community-error', { error: 'You are banned from the room.' });
+          emitPresence();
+          broadcastTyping();
+          return;
+        }
+        await pool.query(
+          'INSERT INTO community_profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING',
+          [socket.auth.id]
+        );
+        socket.join('community');
+        socket.communityName = await displayNameFor(socket.auth.id);
+        emitPresence();
+        broadcastTyping();
+      } catch (err) {
+        console.error('community-join failed:', err.message);
+      }
     });
 
     socket.on('community-admin-watch', () => {
@@ -461,6 +527,13 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
         if (socket.auth?.role !== 'user') return;
         const userId = Number(socket.auth.id);
         if (body?.typing) {
+          const blocked = await assertCanPost(userId);
+          if (blocked) {
+            typingUntil.delete(userId);
+            broadcastTyping();
+            return;
+          }
+          if (!allowTyping(userId)) return;
           if (!socket.communityName) socket.communityName = await displayNameFor(userId);
           typingUntil.set(userId, {
             name: socket.communityName || socket.auth.username,
@@ -485,6 +558,10 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
         }
         const content = String(body?.content || '').trim().slice(0, 2000);
         if (!content) return;
+        if (!allowMessage(socket.auth.id)) {
+          socket.emit('community-error', { error: 'Slow down a little.' });
+          return;
+        }
         let replyTo = Number(body?.replyTo);
         if (!Number.isInteger(replyTo) || replyTo <= 0) replyTo = null;
         if (replyTo) {
@@ -521,6 +598,10 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
         const messageId = Number(body?.messageId);
         const emoji = body?.emoji;
         if (!Number.isInteger(messageId) || !EMOJIS.includes(emoji)) return;
+        if (!allowReaction(socket.auth.id)) {
+          socket.emit('community-error', { error: 'Slow down a little.' });
+          return;
+        }
         const exists = await pool.query(
           'SELECT id FROM community_messages WHERE id = $1 AND deleted_at IS NULL',
           [messageId]
@@ -540,10 +621,9 @@ async function setupCommunityPrototype({ app, io, pool, authMiddleware, requireA
             [messageId, socket.auth.id, emoji]
           );
         }
-        const [message] = await attachReactions([{ id: messageId }]);
         io.to('community').emit('community-reactions', {
           messageId,
-          reactions: message?.reactions || [],
+          reactions: await reactionsFor(messageId),
         });
       } catch (err) {
         console.error('community-react failed:', err.message);
@@ -568,16 +648,21 @@ async function seedIllustrative(pool) {
     const result = await pool.query(
       `INSERT INTO users (username, password_hash)
        VALUES ($1, $2)
-       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+       ON CONFLICT (username) DO NOTHING
        RETURNING id`,
       [demo.username, hash]
     );
-    ids[demo.username] = result.rows[0].id;
+    if (result.rows[0]) {
+      ids[demo.username] = result.rows[0].id;
+    } else {
+      const existing = await pool.query('SELECT id FROM users WHERE username = $1', [demo.username]);
+      ids[demo.username] = existing.rows[0].id;
+    }
     await pool.query(
       `INSERT INTO community_profiles (user_id, display_name, pronouns, bio, avatar_color)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id) DO NOTHING`,
-      [demo.user_id || ids[demo.username], demo.display_name, demo.pronouns, demo.bio, demo.avatar_color]
+      [ids[demo.username], demo.display_name, demo.pronouns, demo.bio, demo.avatar_color]
     );
   }
 
