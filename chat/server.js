@@ -621,10 +621,18 @@ async function notifyDiscordNewMessage(userId, username, payload) {
 }
 
 migrate()
-  .then(() => {
+  .then(async () => {
+    // Prototype room (reactions, replies, typing, profiles, admin tools).
+    // Stays off unless CHAT_NEXT=1. Its schema is applied only for a localhost
+    // database, and it is not part of migrate() above, so production startup
+    // does not create or alter those tables.
+    if (process.env.CHAT_NEXT === '1') {
+      const { setupCommunityPrototype } = require('./community-next');
+      await setupCommunityPrototype({ app, io, pool, authMiddleware, requireAdmin });
+    }
     server.listen(PORT, () => console.log(`Chat backend listening on port ${PORT}`));
   })
   .catch((err) => {
-    console.error('Migration failed:', err);
+    console.error('Startup failed:', err);
     process.exit(1);
   });
