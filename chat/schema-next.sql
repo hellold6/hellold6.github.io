@@ -1,7 +1,7 @@
--- Community chat prototype schema (reactions, replies, profiles, moderation).
--- Additive and optional. server.js does not run this from migrate().
--- community-next.js applies it only when CHAT_NEXT=1 and DATABASE_URL is localhost.
--- Do not run this against production.
+-- Community room tables. Applied on every startup after migrate() creates
+-- users and messages. Idempotent. Does not DROP, UPDATE, or DELETE anything
+-- in users or messages, and does not copy private threads into the room.
+-- Direct messages stay in messages exactly as they are.
 
 CREATE TABLE IF NOT EXISTS community_profiles (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -31,3 +31,8 @@ CREATE TABLE IF NOT EXISTS community_reactions (
   created_at TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (message_id, user_id, emoji)
 );
+
+-- A profile row for each existing account. ON CONFLICT does not change users.
+INSERT INTO community_profiles (user_id)
+SELECT id FROM users
+ON CONFLICT (user_id) DO NOTHING;
