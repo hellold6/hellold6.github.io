@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>community admin · hellold</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08080a;
+    --surface: #101013;
+    --border: rgba(255,255,255,0.06);
+    --text: #e8e8ea;
+    --muted: #6a6a7a;
+    --accent: #e8734a;
+    --teto-pink: #ff7bbd;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color-scheme: dark;
+    min-height: 100dvh;
+  }
+  button, input { font-family: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .logo { font-family: var(--display); font-size: 20px; letter-spacing: -1px; }
+  .logo span { color: var(--accent); }
+  .hero-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--accent); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    color: inherit;
+    transition: 0.3s;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-4px); }
+  .panel:hover { transform: none; }
+  .card h1 { font-family: var(--display); font-size: 42px; letter-spacing: -2px; line-height: 0.9; margin: 0.35rem 0 0.8rem; }
+  .card h2 { font-family: var(--display); font-size: 18px; margin-bottom: 0.75rem; }
+  .lede, .sub { color: var(--muted); }
+  .auth-screen { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+  .auth-screen .card { width: min(100%, 420px); }
+  .field { display: block; margin-bottom: 0.85rem; }
+  .field span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 0.35rem; }
+  input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 0.7rem 0.75rem;
+    font-size: 13px;
+  }
+  input:focus { border-color: var(--accent); }
+  .error { color: var(--teto-pink); min-height: 1.2em; margin-bottom: 0.55rem; }
+  .btn { border: 1px solid var(--border); background: transparent; padding: 0.45rem 0.6rem; font-size: 11px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { width: 100%; background: var(--accent); border-color: var(--accent); color: #1a0d08; font-weight: 700; padding: 0.7rem 0.85rem; }
+  .btn.danger:hover { border-color: var(--teto-pink); color: var(--teto-pink); }
+  .text-btn { background: none; border: none; color: var(--muted); padding: 0; }
+  .text-btn:hover { color: var(--accent); }
+
+  .topbar { border-bottom: 1px solid var(--border); }
+  .topbar-inner, .wrap { width: min(100% - 2rem, 980px); margin: 0 auto; }
+  .topbar-inner { display: flex; align-items: center; justify-content: space-between; padding: 1rem 0; }
+  .brand-lockup { display: flex; align-items: baseline; gap: 0.8rem; }
+  .wrap { padding: 1.5rem 0 3rem; }
+  .stats { display: flex; border: 1px solid var(--border); background: var(--surface); border-radius: 4px; margin-bottom: 1.5rem; }
+  .stat { flex: 1; padding: 1.5rem; text-align: center; border-right: 1px solid var(--border); }
+  .stat:last-child { border-right: none; }
+  .stat-val { display: block; font-family: var(--display); font-size: 24px; color: var(--accent); }
+  .stat-lab { font-size: 9px; text-transform: uppercase; color: var(--muted); }
+  .admin-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 1.5rem; }
+  .search { margin-bottom: 0.8rem; }
+  .person, .mod-msg { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem 0; border-top: 1px solid var(--border); }
+  .person-main, .mod-copy { min-width: 0; flex: 1; }
+  .person .name, .mod-copy .name { font-family: var(--display); font-weight: 800; }
+  .person .meta, .mod-copy .when { color: var(--muted); font-size: 11px; }
+  .actions { display: flex; flex-direction: column; gap: 0.35rem; }
+  .badge { display: inline-block; margin-left: 0.35rem; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--teto-pink); }
+  .badge.quiet { color: var(--muted); }
+  .empty { color: var(--muted); padding: 0.6rem 0; }
+  .status-line { color: var(--muted); min-height: 1.2em; margin-bottom: 0.6rem; }
+  @media (max-width: 800px) {
+    .admin-grid { grid-template-columns: 1fr; }
+    .stats { flex-direction: column; }
+    .stat { border-right: none; border-bottom: 1px solid var(--border); }
+    .stat:last-child { border-bottom: none; }
+  }
+</style>
+</head>
+<body>
+  <div id="login-screen" class="auth-screen">
+    <div class="card">
+      <div class="logo"><span>//</span> hellold</div>
+      <p class="hero-tag">admin</p>
+      <h1>Room</h1>
+      <p class="lede">Search people, mute or ban, and remove messages. Illustrative data only.</p>
+      <p class="error" id="login-error"></p>
+      <form id="login-form">
+        <label class="field"><span>Password</span><input id="password" type="password" autocomplete="current-password"></label>
+        <button class="btn primary" type="submit">Log in</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboard" hidden>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-lockup">
+          <div class="logo"><span>//</span> hellold</div>
+          <div class="hero-tag">community admin</div>
+        </div>
+        <button type="button" class="text-btn" id="logout-btn">log out</button>
+      </div>
+    </header>
+    <main class="wrap">
+      <section class="stats" id="stats">
+        <div class="stat"><span class="stat-val" id="stat-members">0</span><span class="stat-lab">members</span></div>
+        <div class="stat"><span class="stat-val" id="stat-messages">0</span><span class="stat-lab">messages</span></div>
+        <div class="stat"><span class="stat-val" id="stat-today">0</span><span class="stat-lab">today</span></div>
+        <div class="stat"><span class="stat-val" id="stat-muted">0</span><span class="stat-lab">muted</span></div>
+        <div class="stat"><span class="stat-val" id="stat-banned">0</span><span class="stat-lab">banned</span></div>
+      </section>
+      <p class="status-line" id="status-line"></p>
+      <div class="admin-grid">
+        <section class="card panel">
+          <h2>People</h2>
+          <input id="user-search" class="search" placeholder="Search name or username" autocomplete="off">
+          <div id="user-list"></div>
+        </section>
+        <section class="card panel">
+          <h2>Messages</h2>
+          <p class="sub">Newest first. Delete hides a message from the room.</p>
+          <div id="message-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? location.origin
+    : (location.protocol === 'file:' ? 'http://127.0.0.1:3000' : 'https://hellold6-github-io.onrender.com');
+  const TOKEN_KEY = 'admin_next_token';
+  let token = sessionStorage.getItem(TOKEN_KEY);
+  let socket = null;
+  let searchTimer = null;
+
+  function headers() {
+    return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('en-AU', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' });
+  }
+
+  document.getElementById('login-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const password = document.getElementById('password').value;
+    const error = document.getElementById('login-error');
+    error.textContent = '';
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { error.textContent = data.error || 'Could not log in.'; return; }
+      token = data.token;
+      sessionStorage.setItem(TOKEN_KEY, token);
+      openDashboard();
+    } catch {
+      error.textContent = "Couldn't reach the server.";
+    }
+  };
+
+  function logout() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    token = null;
+    if (socket) { socket.disconnect(); socket = null; }
+    document.getElementById('dashboard').hidden = true;
+    document.getElementById('login-screen').hidden = false;
+  }
+
+  async function openDashboard() {
+    document.getElementById('login-screen').hidden = true;
+    document.getElementById('dashboard').hidden = false;
+    await refresh();
+    socket = io(API_BASE, { auth: { token } });
+    socket.on('connect', () => socket.emit('community-admin-watch'));
+    socket.on('community-message', refresh);
+    socket.on('community-deleted', refresh);
+    socket.on('connect_error', logout);
+  }
+
+  async function refresh() {
+    await Promise.all([loadStats(), loadUsers(), loadMessages()]);
+  }
+
+  async function loadStats() {
+    const res = await fetch(`${API_BASE}/api/community/admin/stats`, { headers: headers() });
+    if (res.status === 401) return logout();
+    if (!res.ok) return;
+    const stats = await res.json();
+    document.getElementById('stat-members').textContent = stats.members;
+    document.getElementById('stat-messages').textContent = stats.messages;
+    document.getElementById('stat-today').textContent = stats.today;
+    document.getElementById('stat-muted').textContent = stats.muted;
+    document.getElementById('stat-banned').textContent = stats.banned;
+  }
+
+  async function loadUsers() {
+    const q = document.getElementById('user-search').value.trim();
+    const res = await fetch(`${API_BASE}/api/community/admin/users?q=${encodeURIComponent(q)}`, { headers: headers() });
+    if (res.status === 401) return logout();
+    if (!res.ok) return;
+    const users = await res.json();
+    const list = document.getElementById('user-list');
+    list.replaceChildren();
+    if (!users.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = 'No one matches that search.';
+      list.appendChild(empty);
+      return;
+    }
+    users.forEach((user) => list.appendChild(renderUser(user)));
+  }
+
+  function renderUser(user) {
+    const row = document.createElement('article');
+    row.className = 'person';
+    const main = document.createElement('div');
+    main.className = 'person-main';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = user.display_name;
+    const muted = user.muted_until && new Date(user.muted_until) > new Date();
+    if (user.banned_at) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = 'banned';
+      name.appendChild(badge);
+    } else if (muted) {
+      const badge = document.createElement('span');
+      badge.className = 'badge quiet';
+      badge.textContent = 'muted';
+      name.appendChild(badge);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = `@${user.username}${user.pronouns ? ` · ${user.pronouns}` : ''}`;
+    main.append(name, meta);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const mute = document.createElement('button');
+    mute.type = 'button';
+    mute.className = 'btn';
+    mute.textContent = muted ? 'Unmute' : 'Mute';
+    mute.addEventListener('click', () => moderate(user.id, muted ? 'unmute' : 'mute'));
+    const ban = document.createElement('button');
+    ban.type = 'button';
+    ban.className = 'btn danger';
+    ban.textContent = user.banned_at ? 'Unban' : 'Ban';
+    ban.addEventListener('click', () => moderate(user.id, user.banned_at ? 'unban' : 'ban'));
+    actions.append(mute, ban);
+    row.append(main, actions);
+    return row;
+  }
+
+  async function loadMessages() {
+    const res = await fetch(`${API_BASE}/api/community/admin/messages`, { headers: headers() });
+    if (res.status === 401) return logout();
+    if (!res.ok) return;
+    const messages = await res.json();
+    const list = document.getElementById('message-list');
+    list.replaceChildren();
+    if (!messages.length) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = 'No messages in the room.';
+      list.appendChild(empty);
+      return;
+    }
+    messages.forEach((message) => {
+      const row = document.createElement('article');
+      row.className = 'mod-msg';
+      const copy = document.createElement('div');
+      copy.className = 'mod-copy';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = message.display_name;
+      const body = document.createElement('div');
+      body.textContent = message.content;
+      const when = document.createElement('div');
+      when.className = 'when';
+      when.textContent = formatTime(message.created_at);
+      copy.append(name, body, when);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn danger';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => removeMessage(message.id));
+      row.append(copy, del);
+      list.appendChild(row);
+    });
+  }
+
+  async function moderate(userId, action) {
+    const status = document.getElementById('status-line');
+    const res = await fetch(`${API_BASE}/api/community/admin/users/${userId}/${action}`, {
+      method: 'POST',
+      headers: headers(),
+      body: action === 'mute' ? JSON.stringify({ minutes: 10 }) : '{}',
+    });
+    if (!res.ok) { status.textContent = 'That action did not stick.'; return; }
+    status.textContent = action === 'mute' ? 'Muted for 10 minutes.' : `${action.charAt(0).toUpperCase()}${action.slice(1)} saved.`;
+    await refresh();
+  }
+
+  async function removeMessage(id) {
+    const status = document.getElementById('status-line');
+    const res = await fetch(`${API_BASE}/api/community/admin/messages/${id}`, { method: 'DELETE', headers: headers() });
+    if (!res.ok) { status.textContent = 'Could not delete that message.'; return; }
+    status.textContent = 'Message removed from the room.';
+    await refresh();
+  }
+
+  document.getElementById('user-search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadUsers, 150);
+  });
+  document.getElementById('logout-btn').onclick = logout;
+  if (token) openDashboard();
+</script>
+</body>
+</html>
