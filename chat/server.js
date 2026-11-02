@@ -274,11 +274,35 @@ app.get('/api/admin/conversations', authMiddleware, requireAdmin, async (req, re
 });
 
 app.get('/api/admin/messages/:userId', authMiddleware, requireAdmin, async (req, res) => {
+  const limit = Number(req.query.limit);
+  // No limit: the full thread, oldest first. Export and any older admin page use this.
+  if (!Number.isInteger(limit) || limit <= 0) {
+    const result = await pool.query(
+      'SELECT id, sender, type, content, link_preview, reply_to, created_at FROM messages WHERE user_id = $1 ORDER BY created_at ASC',
+      [req.params.userId]
+    );
+    return res.json(result.rows);
+  }
+  const pageSize = Math.min(limit, 100);
+  const before = Number(req.query.before);
+  const params = [req.params.userId];
+  let where = 'user_id = $1';
+  if (Number.isInteger(before) && before > 0) {
+    params.push(before);
+    where += ` AND id < $${params.length}`;
+  }
+  params.push(pageSize + 1);
   const result = await pool.query(
-    'SELECT id, sender, type, content, link_preview, reply_to, created_at FROM messages WHERE user_id = $1 ORDER BY created_at ASC',
-    [req.params.userId]
+    `SELECT id, sender, type, content, link_preview, reply_to, created_at
+     FROM messages
+     WHERE ${where}
+     ORDER BY id DESC
+     LIMIT $${params.length}`,
+    params
   );
-  res.json(result.rows);
+  const hasMore = result.rows.length > pageSize;
+  const messages = result.rows.slice(0, pageSize).reverse();
+  res.json({ messages, hasMore });
 });
 
 // ---------- REST: media upload (images + videos; both visitors and admin use this) ----------
