@@ -783,7 +783,8 @@
     }], { stick: true });
   }
   async function compressAdminImage(file) {
-    if ((file.type || '').toLowerCase() === 'image/gif') return { blob: file, mimeType: file.type || 'image/gif' };
+    const isGif = (file.type || '').toLowerCase() === 'image/gif' || /\.gif$/i.test(file.name || '');
+    if (isGif) return { blob: file, mimeType: 'image/gif' };
     const img = await new Promise((resolve, reject) => {
       const el = new Image();
       const url = URL.createObjectURL(file);
